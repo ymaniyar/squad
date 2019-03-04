@@ -1,12 +1,10 @@
 """Test a model and generate submission CSV.
-
 Usage:
     > python test.py --split SPLIT --load_path PATH --name NAME
     where
     > SPLIT is either "dev" or "test"
     > PATH is a path to a checkpoint (e.g., save/train/model-01/best.pth.tar)
     > NAME is a name to identify the test run
-
 Author:
     Chris Chute (chute@stanford.edu)
 """
@@ -128,7 +126,7 @@ def main(args):
     # Write submission file
     sub_path = join(args.save_dir, args.split + '_' + args.sub_file)
     log.info('Writing submission file to {}...'.format(sub_path))
-    with open(sub_path, 'w', newline='', encoding='utf-8') as csv_fh:
+    with open(sub_path, 'w') as csv_fh:
         csv_writer = csv.writer(csv_fh, delimiter=',')
         csv_writer.writerow(['Id', 'Predicted'])
         for uuid in sorted(sub_dict):

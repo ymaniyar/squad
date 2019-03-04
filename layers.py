@@ -1,5 +1,4 @@
 """Assortment of layers for use in models.py.
-
 Author:
     Chris Chute (chute@stanford.edu)
 """
@@ -10,43 +9,82 @@ import torch.nn.functional as F
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from util import masked_softmax
+from cnn import CNN
 
 
 class Embedding(nn.Module):
     """Embedding layer used by BiDAF, without the character-level component.
-
     Word-level embeddings are further refined using a 2-layer Highway Encoder
     (see `HighwayEncoder` class for details).
-
     Args:
         word_vectors (torch.Tensor): Pre-trained word vectors.
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations
     """
-    def __init__(self, word_vectors, hidden_size, drop_prob):
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob):
         super(Embedding, self).__init__()
         self.drop_prob = drop_prob
-        self.embed = nn.Embedding.from_pretrained(word_vectors)
-        self.proj = nn.Linear(word_vectors.size(1), hidden_size, bias=False)
-        self.hwy = HighwayEncoder(2, hidden_size)
+        self.embed_w = nn.Embedding.from_pretrained(word_vectors)
+        self.embed_c = nn.Embedding.from_pretrained(char_vectors, freeze = False)
 
-    def forward(self, x):
-        emb = self.embed(x)   # (batch_size, seq_len, embed_size)
-        emb = F.dropout(emb, self.drop_prob, self.training)
-        emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
-        emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
+        self.proj = nn.Linear(2 * word_vectors.size(1), hidden_size, bias=False)
+        self.hwy = HighwayEncoder(2, hidden_size)
+        # print("hidden_size: ", hidden_size)
+        self.e_char = 64
+        self.e_word = 300
+        self.m_word = 16
+        self.cnn = CNN(self.e_char, self.e_word, self.m_word)
+
+    def forward(self, x_w, x_c):
+        # batch_size = 64, seq_len = ?
+        # print("x_w size: ", x_w.size()) # (batch_size, max_sen_len)
+        # print("x_c size: ", x_c.size()) # (batch_size, max_sen_len, max_word_len)
+        # print(x_c)
+        # print(x_w)
+
+
+        emb_w = self.embed_w(x_w)  # (batch_size, seq_len, embed_size)
+        emb_c = self.embed_c(x_c)   
+        # emb = self.embed(x)
+
+        # UNCOMMENT THIS OUT ONCE SIZES MAKE SENSE!!!!! 
+        # emb_w = F.dropout(emb_w, self.drop_prob, self.training)
+        # emb_c = F.dropout(emb_c, self.drop_prob, self.training)
+        
+        # emb = F.dropout(emb, self.drop_prob, self.training)
+
+        # print("emb_w size: ", emb_w.size()) # (batch_size, max_sentence_len, e_word)
+        # print("emb_c size: ", emb_c.size()) # (batch_size, max_sentence_len, max_word_len, 64? )
+
+        # print("emb_w: ", emb_w)
+        # print("emb_c: ", emb_c)
+        x_reshaped = emb_c.permute(0, 1, 3, 2)
+        x_reshaped_new = x_reshaped.contiguous().view(-1, self.e_char, self.m_word)
+        x_conv_out_c = self.cnn(x_reshaped_new) 
+        # x_conv_out_c = (batch_size * max_sen_len, e_word)
+        # print("x_conv_out size: ", x_conv_out_c.size())
+
+        emb_w = emb_w.view(-1, self.e_word)
+        # print("x_conv_out_c: ", x_conv_out_c)
+        concatenated = torch.cat((x_conv_out_c, emb_w), 1)
+        # print("concatenated: ", concatenated.size())
+        # emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
+        # emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
+
+        emb = self.proj(concatenated)
+        emb = self.hwy(emb)
+
+        # emb_c = self.embed_c()
 
         return emb
 
 
 class HighwayEncoder(nn.Module):
     """Encode an input sequence using a highway network.
-
     Based on the paper:
     "Highway Networks"
     by Rupesh Kumar Srivastava, Klaus Greff, Jürgen Schmidhuber
     (https://arxiv.org/abs/1505.00387).
-
     Args:
         num_layers (int): Number of layers in the highway encoder.
         hidden_size (int): Size of hidden activations.
@@ -70,10 +108,8 @@ class HighwayEncoder(nn.Module):
 
 class RNNEncoder(nn.Module):
     """General-purpose layer for encoding a sequence using a bidirectional RNN.
-
     Encoded output is the RNN's hidden state at each position, which
     has shape `(batch_size, seq_len, hidden_size * 2)`.
-
     Args:
         input_size (int): Size of a single timestep in the input.
         hidden_size (int): Size of the RNN hidden state.
@@ -117,7 +153,6 @@ class RNNEncoder(nn.Module):
 
 class BiDAFAttention(nn.Module):
     """Bidirectional attention originally used by BiDAF.
-
     Bidirectional attention computes attention in two directions:
     The context attends to the query and the query attends to the context.
     The output of this layer is the concatenation of [context, c2q_attention,
@@ -125,7 +160,6 @@ class BiDAFAttention(nn.Module):
     the attention vector at each timestep, along with the embeddings from
     previous layers, to flow through the attention layer to the modeling layer.
     The output has shape (batch_size, context_len, 8 * hidden_size).
-
     Args:
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations.
@@ -161,11 +195,9 @@ class BiDAFAttention(nn.Module):
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
         terminology of the BiDAF paper).
-
         A naive implementation as described in BiDAF would concatenate the
         three vectors then project the result with a single weight matrix. This
         method is a more memory-efficient implementation of the same operation.
-
         See Also:
             Equation 1 in https://arxiv.org/abs/1611.01603
         """
@@ -185,13 +217,11 @@ class BiDAFAttention(nn.Module):
 
 class BiDAFOutput(nn.Module):
     """Output layer used by BiDAF for question answering.
-
     Computes a linear transformation of the attention and modeling
     outputs, then takes the softmax of the result to get the start pointer.
     A bidirectional LSTM is then applied the modeling output to produce `mod_2`.
     A second linear+softmax of the attention output and `mod_2` is used
     to get the end pointer.
-
     Args:
         hidden_size (int): Hidden size used in the BiDAF model.
         drop_prob (float): Probability of zero-ing out activations.
