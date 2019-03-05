@@ -42,9 +42,10 @@ class Embedding(nn.Module):
         # print(x_c)
         # print(x_w)
 
-
+        print(x_w.shape)
         emb_w = self.embed_w(x_w)  # (batch_size, seq_len, embed_size)
         emb_c = self.embed_c(x_c)   
+        # print(emb_c.shape)
         # emb = self.embed(x)
 
         # UNCOMMENT THIS OUT ONCE SIZES MAKE SENSE!!!!! 
@@ -59,23 +60,29 @@ class Embedding(nn.Module):
         # print("emb_w: ", emb_w)
         # print("emb_c: ", emb_c)
         x_reshaped = emb_c.permute(0, 1, 3, 2)
+        # print(x_reshaped.shape)
         x_reshaped_new = x_reshaped.contiguous().view(-1, self.e_char, self.m_word)
-        x_conv_out_c = self.cnn(x_reshaped_new) 
+        # print(x_reshaped_new.shape)
+        x_conv_out_c = self.cnn(x_reshaped_new)
+        # print(x_conv_out_c.shape) 
         # x_conv_out_c = (batch_size * max_sen_len, e_word)
         # print("x_conv_out size: ", x_conv_out_c.size())
-
+        # print(emb_w.shape)
         emb_w = emb_w.view(-1, self.e_word)
+        # print(emb_w.shape)
         # print("x_conv_out_c: ", x_conv_out_c)
         concatenated = torch.cat((x_conv_out_c, emb_w), 1)
+
+        emb = F.dropout(concatenated, self.drop_prob, self.training)
         # print("concatenated: ", concatenated.size())
         # emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         # emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
-
-        emb = self.proj(concatenated)
+        # print(emb.shape)
+        emb = self.proj(emb)
         emb = self.hwy(emb)
 
         # emb_c = self.embed_c()
-
+        print(emb.shape)
         return emb
 
 
@@ -250,3 +257,12 @@ class BiDAFOutput(nn.Module):
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
 
         return log_p1, log_p2
+
+if __name__ == '__main__':
+    word_vectors = torch.ones(88714, 300)
+    char_vectors = torch.ones(1376, 64)
+    word_indices = torch.ones(100, 110, dtype=torch.long)
+    char_indices = torch.ones(100, 110, 16, dtype=torch.long)
+    emb = Embedding(word_vectors, char_vectors, 100, 0.2)
+    output = emb.forward(word_indices, char_indices)
+

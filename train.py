@@ -45,8 +45,8 @@ def main(args):
     char_vectors = util.torch_from_json(args.char_emb_file)
 
     # print(type(word_vectors))
-    # print("word_vectors shape: ", word_vectors.size())
-    # print("char_vectors shape: ", char_vectors.size())
+    print("word_vectors shape: ", word_vectors.size())
+    print("char_vectors shape: ", char_vectors.size())
 
 
     # Get model

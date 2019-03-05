@@ -50,32 +50,28 @@ class BiDAF(nn.Module):
         self.out = layers.BiDAFOutput(hidden_size=hidden_size,
                                       drop_prob=drop_prob)
 
-        self.batch_size = 64
-        self.hidden_size = 100
+        # self.batch_size = 64
+        self.hidden_size = hidden_size
 
     def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):
+
         c_mask = torch.zeros_like(cw_idxs) != cw_idxs
         q_mask = torch.zeros_like(qw_idxs) != qw_idxs
         c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
-        # print(type(c_len), c_len.size(), q_len.size())
 
         c_emb = self.emb(cw_idxs, cc_idxs)         # (batch_size, c_len, hidden_size)
         q_emb = self.emb(qw_idxs, qc_idxs)         # (batch_size, q_len, hidden_size)
 
-        # c_emb = c_emb.view(64, 369, 100)
-        # q_emb = q_emb.view(64, )
-        # print(c_emb.size())
-        # print("here")
-        # print("c_emb size: ", c_emb.size())
-        # print("q_emb size: ", q_emb.size())
-
-        c_len_ = int(c_emb.size()[0]/self.batch_size)
-        q_len_ = int(q_emb.size()[0]/self.batch_size)
+        # print(c_emb.shape)
+        # print(q_emb.shape)
+        
+        c_max_len = cw_idxs.shape[1]
+        q_max_len = qw_idxs.shape[1]
 
         # print(c_len_, q_len_)
 
-        c_emb = c_emb.view(self.batch_size, c_len_, self.hidden_size)
-        q_emb = q_emb.view(self.batch_size, q_len_, self.hidden_size)
+        c_emb = c_emb.view(-1, c_max_len, self.hidden_size)
+        q_emb = q_emb.view(-1, q_max_len, self.hidden_size)
 
         c_enc = self.enc(c_emb, c_len)    # (batch_size, c_len, 2 * hidden_size)
         q_enc = self.enc(q_emb, q_len)    # (batch_size, q_len, 2 * hidden_size)
