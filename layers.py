@@ -42,7 +42,7 @@ class Embedding(nn.Module):
         # print(x_c)
         # print(x_w)
 
-        print(x_w.shape)
+        # print(x_w.shape)
         emb_w = self.embed_w(x_w)  # (batch_size, seq_len, embed_size)
         emb_c = self.embed_c(x_c)   
         # print(emb_c.shape)
@@ -82,7 +82,7 @@ class Embedding(nn.Module):
         emb = self.hwy(emb)
 
         # emb_c = self.embed_c()
-        print(emb.shape)
+        # print(emb.shape)
         return emb
 
 
