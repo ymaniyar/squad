@@ -1,4 +1,5 @@
 """Assortment of layers for use in models.py.
+
 Author:
     Chris Chute (chute@stanford.edu)
 """
@@ -10,12 +11,16 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from util import masked_softmax
 from cnn import CNN
+import json
+import spacy
 
 
 class Embedding(nn.Module):
     """Embedding layer used by BiDAF, without the character-level component.
+
     Word-level embeddings are further refined using a 2-layer Highway Encoder
     (see `HighwayEncoder` class for details).
+
     Args:
         word_vectors (torch.Tensor): Pre-trained word vectors.
         hidden_size (int): Size of hidden activations.
@@ -27,7 +32,7 @@ class Embedding(nn.Module):
         self.embed_w = nn.Embedding.from_pretrained(word_vectors)
         self.embed_c = nn.Embedding.from_pretrained(char_vectors, freeze = False)
 
-        self.proj = nn.Linear(2 * word_vectors.size(1), hidden_size, bias=False)
+        self.proj = nn.Linear(2 * word_vectors.size(1) + 1, hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
         # print("hidden_size: ", hidden_size)
         self.e_char = 64
@@ -35,63 +40,159 @@ class Embedding(nn.Module):
         self.m_word = 16
         self.cnn = CNN(self.e_char, self.e_word, self.m_word)
 
+        with open ('wordidx2posidx.json') as json_file: 
+            self.wordidx2posidx = json.load(json_file)
+
+        with open('idx2word.json') as json_file:
+            self.idx2word = json.load(json_file)
+        print(len(self.idx2word))
+
+        with open('./data/word2idx.json') as json_file:
+            self.word2idx = json.load(json_file)
+
+        with open('dep2idx.json') as json_file:
+            self.dep2idx = json.load(json_file)
+
+        print(self.dep2idx)
+
+
+
     def forward(self, x_w, x_c):
         # batch_size = 64, seq_len = ?
         # print("x_w size: ", x_w.size()) # (batch_size, max_sen_len)
         # print("x_c size: ", x_c.size()) # (batch_size, max_sen_len, max_word_len)
-        # print(x_c)
-        # print(x_w)
 
-        # print(x_w.shape)
+
         emb_w = self.embed_w(x_w)  # (batch_size, seq_len, embed_size)
-        emb_c = self.embed_c(x_c)   
-        # print(emb_c.shape)
-        # emb = self.embed(x)
-
-        # UNCOMMENT THIS OUT ONCE SIZES MAKE SENSE!!!!! 
-        # emb_w = F.dropout(emb_w, self.drop_prob, self.training)
-        # emb_c = F.dropout(emb_c, self.drop_prob, self.training)
-        
-        # emb = F.dropout(emb, self.drop_prob, self.training)
-
-        # print("emb_w size: ", emb_w.size()) # (batch_size, max_sentence_len, e_word)
-        # print("emb_c size: ", emb_c.size()) # (batch_size, max_sentence_len, max_word_len, 64? )
-
-        # print("emb_w: ", emb_w)
-        # print("emb_c: ", emb_c)
+        emb_c = self.embed_c(x_c) 
+  
         x_reshaped = emb_c.permute(0, 1, 3, 2)
-        # print(x_reshaped.shape)
         x_reshaped_new = x_reshaped.contiguous().view(-1, self.e_char, self.m_word)
-        # print(x_reshaped_new.shape)
-        x_conv_out_c = self.cnn(x_reshaped_new)
-        # print(x_conv_out_c.shape) 
-        # x_conv_out_c = (batch_size * max_sen_len, e_word)
-        # print("x_conv_out size: ", x_conv_out_c.size())
-        # print(emb_w.shape)
+        x_conv_out_c = self.cnn(x_reshaped_new) 
+
         emb_w = emb_w.view(-1, self.e_word)
-        # print(emb_w.shape)
-        # print("x_conv_out_c: ", x_conv_out_c)
-        concatenated = torch.cat((x_conv_out_c, emb_w), 1)
+
+        pos_list = [[float(self.wordidx2posidx[str(int(word))]) for word in sentence] for sentence in x_w]
+
+        # x_w = [batch_size, max_sen_len]
+        # reconstruct each sentence 
+        # for sentence_int in x_w:
+        #     sentence = ""
+        #     for word_int in sentence_int: 
+        #         sentence+= self.idx2word[str(int(word_int))]
+        #     print(sentence)
+
+        NULL_IDX = self.word2idx["--NULL--"]
+        OOV_IDX = self.word2idx["--OOV--"]
+
+        # sentences = [[self.idx2word[str(int(word_int))] for word_int in sentence_int if int(word_int) != NULL_IDX and int(word_int) != OOV_IDX] for sentence_int in x_w]
+        
+        sentences_split = [[self.idx2word[str(int(word_int))] for word_int in sentence_int] for sentence_int in x_w]
+        # print(sentences[0])
+        # print(sentences[1])
+
+        space = " "
+        sentences = [space.join(sentences_split[i]) for i in range(len(sentences_split))]
+
+        # sentences = (batch_size, sentence_length)
+        nlp = spacy.load('en')
+
+        # for sentence in sentences:
+        #     print(len(nlp(sentence)))
+        #     print(nlp(sentence))
+        #     break
+        #     if len(nlp(sentence))!=356:
+        #         print("wrong length!!!! fix")
+        #         print(len(nlp(sentence)))
+        #         print(nlp(sentence))
+            # for token in nlp(sentence):
+
+
+
+        # BUT WE NEED THIS TO BE THE SAME LENGTH FOR ALL SENTENCES!!!! SO ALL THE NULL, OOV tokens have to correspond to token.dep_ index of 0 or -1 for consistency
+        # figure out some way to re-append these tokens such that all of these lists are the same length (max_sen_len)
+        
+
+        for s, sentence in enumerate(sentences):
+            tokens = list(nlp(sentence))
+            print(type(tokens))
+            sent_split = sentences_split[s]
+            # print("tokens: ", tokens, type(tokens))
+            # print(sent_split)
+
+            # if len(tokens) != len(sent_split):
+            #     tokens_new = []
+            #     offset = 0
+            #     for t, word in enumerate(sent_split):
+            #         tok = tokens[t+offset]
+            #         if word != str(tok):
+            #             offset += 1
+            #         else:
+            #             tokens_new.append(tok)
+            while len(tokens) != len(sent_split):
+                for t, tok in enumerate(tokens):
+                    if tok != sent_split[t]:
+                        tokens.pop(t)
+                        break
+            sentences[s] = space.join(tokens)
+
+        # for sentence in sentences:
+        #     print(len(sentence), len(nlp(sentences)))
+
+
+
+        dep_list = [[[[self.dep2idx[token.dep_], self.word2idx[token.head.text]]] for token in nlp(sentence)] for sentence in sentences] # this doesn't account for all possible dep_parses 
+        
+
+
+        # head_list = [[[self.word2idx[token.head.text]] for token in nlp(sentence)] for sentence in sentences]
+        # print(len(dep_list), len(dep_list[0]))
+        # for thing in dep_list:
+        #     print(len(thing))
+        #     if (len(thing)!=356):
+        #         print("WRONG LENGTH!! SOS")
+        #         print(len(thing))
+        dep = torch.tensor(dep_list)
+        print(dep.shape)
+        head = torch.tensor(head_list)
+        print("sizes:" , dep.size(), head.size())
+
+
+
+
+        pos = torch.tensor(pos_list)
+        print(pos.size())
+        pos = pos.view(pos.shape[0], pos.shape[1], -1)
+        print("new size: ", pos.size())
+        pos = pos.view(-1, pos.shape[2])
+
+
+
+
+
+
+        
+        concatenated = torch.cat((x_conv_out_c, emb_w, x), 1)
 
         emb = F.dropout(concatenated, self.drop_prob, self.training)
-        # print("concatenated: ", concatenated.size())
-        # emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
-        # emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
-        # print(emb.shape)
-        emb = self.proj(emb)
+        emb = self.proj(concatenated)
         emb = self.hwy(emb)
 
+        print(emb.size())
+
         # emb_c = self.embed_c()
-        # print(emb.shape)
+
         return emb
 
 
 class HighwayEncoder(nn.Module):
     """Encode an input sequence using a highway network.
+
     Based on the paper:
     "Highway Networks"
     by Rupesh Kumar Srivastava, Klaus Greff, Jürgen Schmidhuber
     (https://arxiv.org/abs/1505.00387).
+
     Args:
         num_layers (int): Number of layers in the highway encoder.
         hidden_size (int): Size of hidden activations.
@@ -115,8 +216,10 @@ class HighwayEncoder(nn.Module):
 
 class RNNEncoder(nn.Module):
     """General-purpose layer for encoding a sequence using a bidirectional RNN.
+
     Encoded output is the RNN's hidden state at each position, which
     has shape `(batch_size, seq_len, hidden_size * 2)`.
+
     Args:
         input_size (int): Size of a single timestep in the input.
         hidden_size (int): Size of the RNN hidden state.
@@ -155,11 +258,13 @@ class RNNEncoder(nn.Module):
         # Apply dropout (RNN applies dropout after all but the last layer)
         x = F.dropout(x, self.drop_prob, self.training)
 
+        # print("x size (in LSTM forward): ", x.size())
         return x
 
 
 class BiDAFAttention(nn.Module):
     """Bidirectional attention originally used by BiDAF.
+
     Bidirectional attention computes attention in two directions:
     The context attends to the query and the query attends to the context.
     The output of this layer is the concatenation of [context, c2q_attention,
@@ -167,6 +272,7 @@ class BiDAFAttention(nn.Module):
     the attention vector at each timestep, along with the embeddings from
     previous layers, to flow through the attention layer to the modeling layer.
     The output has shape (batch_size, context_len, 8 * hidden_size).
+
     Args:
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations.
@@ -182,9 +288,12 @@ class BiDAFAttention(nn.Module):
         self.bias = nn.Parameter(torch.zeros(1))
 
     def forward(self, c, q, c_mask, q_mask):
+        # print("c size: ", c.size())
+        # print("q size: ", q.size())
         batch_size, c_len, _ = c.size()
         q_len = q.size(1)
         s = self.get_similarity_matrix(c, q)        # (batch_size, c_len, q_len)
+        # print("similarity matrix size: ", s.size())
         c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
         q_mask = q_mask.view(batch_size, 1, q_len)  # (batch_size, 1, q_len)
         s1 = masked_softmax(s, q_mask, dim=2)       # (batch_size, c_len, q_len)
@@ -202,9 +311,11 @@ class BiDAFAttention(nn.Module):
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
         terminology of the BiDAF paper).
+
         A naive implementation as described in BiDAF would concatenate the
         three vectors then project the result with a single weight matrix. This
         method is a more memory-efficient implementation of the same operation.
+
         See Also:
             Equation 1 in https://arxiv.org/abs/1611.01603
         """
@@ -221,14 +332,24 @@ class BiDAFAttention(nn.Module):
 
         return s
 
+class SelfAttention(nn.Module):
+
+    def __init__(self, hidden_size, drop_prob):
+        super(SelfAttention, self).__init__()
+        self.blah = 0
+
+    def forward(self, c, q, c_mask, q_mask):
+        return 0
 
 class BiDAFOutput(nn.Module):
     """Output layer used by BiDAF for question answering.
+
     Computes a linear transformation of the attention and modeling
     outputs, then takes the softmax of the result to get the start pointer.
     A bidirectional LSTM is then applied the modeling output to produce `mod_2`.
     A second linear+softmax of the attention output and `mod_2` is used
     to get the end pointer.
+
     Args:
         hidden_size (int): Hidden size used in the BiDAF model.
         drop_prob (float): Probability of zero-ing out activations.
@@ -257,12 +378,3 @@ class BiDAFOutput(nn.Module):
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
 
         return log_p1, log_p2
-
-if __name__ == '__main__':
-    word_vectors = torch.ones(88714, 300)
-    char_vectors = torch.ones(1376, 64)
-    word_indices = torch.ones(100, 110, dtype=torch.long)
-    char_indices = torch.ones(100, 110, 16, dtype=torch.long)
-    emb = Embedding(word_vectors, char_vectors, 100, 0.2)
-    output = emb.forward(word_indices, char_indices)
-
