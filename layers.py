@@ -112,7 +112,7 @@ class Embedding(nn.Module):
                 nlp_sentences[s] = sentence
 
 
-        tag_list = [[[float(self.dep2idx[token.dep_]), float(self.word2idx[token.head.text]), float(self.pos2idx[token.pos_]), float(1) if str(token) in [str(e) for e in sentence.ents] else float(0)] for token in sentence] for sentence in nlp_sentences] 
+        tag_list = [[[float(self.dep2idx[token.dep_]) if token.dep_ in self.dep2idx else -1, float(self.word2idx[token.head.text]) if token.head.text in self.word2idx else -1, float(self.pos2idx[token.pos_]) if token.pos_ in self.pos2idx else -1, float(1) if str(token) in [str(e) for e in sentence.ents] else float(0)] for token in sentence] for sentence in nlp_sentences] 
         tags = torch.tensor(tag_list)
 
         # ent_list = [[1 if str(token) in [str(e) for e in sentence.ents] else 0 for token in sentence] for sentence in nlp_sentences]
