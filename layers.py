@@ -30,7 +30,7 @@ class Transformer(nn.Module):
 
 
 class PositionalEncoder(nn.Module):
-    def __init(self, ):
+    def __init(self, embed_size, dropout):
         super(PositionalEncoder, self).__init()
         
 
