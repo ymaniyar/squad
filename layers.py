@@ -17,6 +17,114 @@ import numpy as np
 from spacy.tokens import Doc
 from spacy.attrs import LOWER, POS, ENT_TYPE, IS_ALPHA
 
+class Transformer(nn.Module):
+    def __init(self, embedding, dropout_prob = 0.1): 
+        # embedding: batch * seq_len * embed_size (word + chars + 4)
+        super(Transformer, self).__init()
+        self.pos_encoder = PositionalEncoder()
+        self.encoder = TransformerEncoder()
+        self.decoder = TransformerDecoder()
+
+
+    def forward(self, input, output):
+
+
+class PositionalEncoder(nn.Module):
+    def __init(self, embed_size, dropout):
+        super(PositionalEncoder, self).__init()
+        
+
+    def forward(self, x):
+
+class TransformerEncoder(nn.Module):
+    def __init(self, layer, N):
+        super(TransformerEncoder, self).__init()
+        self.layers = nn.ModuleList([copy.deepcopy(layer) for _ in range(N)])
+        self.norm = nn.LayerNorm(layer.shape, eps=1e-06)
+
+    def forward(self, x, mask):
+
+
+class TransformerDecoder(nn.Module):
+    def __init(self, ):
+        super(TransformerDecoder, self).__init()
+        
+
+    def forward(self, x):
+
+class EncLayer(nn.Module):
+    def __init(self, dropout, embed_size):
+        super(EncLayer, self).__init()
+        self.self_att = MultiHeadSelfAttention()
+        self.feed_fwd = FeedForward()
+        self.dropout = dropout
+        self.norm = nn.LayerNorm(embed_size, eps=1e-06)
+
+    def forward(self, x):
+        res1 = x
+        x = self.self_att(x)
+        x = self.norm(x)
+        x = self.dropout(x)
+        res2 = res1 + x
+        x = res2
+        x = self.feed_fwd(x)
+        x = self.norm(x)
+        x = self.dropout(x)
+        x += res2 
+        return x
+
+
+class DecLayer(nn.Module):
+    def __init(self, embed_size, dropout):
+        super(DecLayer, self).__init()
+        self.masked_self_att = MultiHeadSelfAttention()
+        self.self_att = MultiHeadSelfAttention()
+        self.feed_fwd = FeedForward()
+        self.dropout = dropout
+        self.norm = nn.LayerNorm(embed_size, eps=1e-06)
+
+    def forward(self, x):
+        res1 = x
+        x = self.masked_self_att(x)
+        x = self.norm(x)
+        x = self.dropout(x)
+        res2 = res1 + x
+        x = res2
+        x = self.self_att(x)
+        x = self.norm(x)
+        x = self.dropout(x)
+        res3 = res2 + x
+        x = res3
+        x = self.feed_fwd(x)
+        x = self.norm(x)
+        x = self.dropout(x)
+        x += res3
+        return x
+
+class MultiHeadSelfAttention(nn.Module):
+
+    def __init__(self, hidden_size, drop_prob):
+        super(SelfAttention, self).__init__()
+        self.blah = 0
+
+    def forward(self, c, q, c_mask, q_mask):
+        return 0
+
+class FeedForward(nn.Module):
+
+    def __init__(self, embed_size, ff_size, ff_size2, dropout):
+        super(FeedForward, self).__init__()
+        self.W1 = nn.Linear(embed_size, ff_size)
+        self.W2 = nn.Linear(ff_size, ff_size2)
+        self.W3 = nn.Linear(ff_size2, embed_size)
+        self.dropout = dropout
+
+
+    def forward(self, x):
+        x_2 = self.dropout(F.relu(self.W1(x)))
+        x_3 = self.dropout(F.relu(self.W2(x_2)))
+        return self.W3(x_3)
+
 
 class Embedding(nn.Module):
     """Embedding layer used by BiDAF, without the character-level component.
@@ -281,15 +389,6 @@ class BiDAFAttention(nn.Module):
         s = s0 + s1 + s2 + self.bias
 
         return s
-
-class SelfAttention(nn.Module):
-
-    def __init__(self, hidden_size, drop_prob):
-        super(SelfAttention, self).__init__()
-        self.blah = 0
-
-    def forward(self, c, q, c_mask, q_mask):
-        return 0
 
 class BiDAFOutput(nn.Module):
     """Output layer used by BiDAF for question answering.
