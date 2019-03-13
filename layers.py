@@ -18,23 +18,35 @@ from spacy.tokens import Doc
 from spacy.attrs import LOWER, POS, ENT_TYPE, IS_ALPHA
 
 class Transformer(nn.Module):
-    def __init(self, embedding, dropout_prob = 0.1): 
+    def __init(self, embed_size, dropout): 
         # embedding: batch * seq_len * embed_size (word + chars + 4)
         super(Transformer, self).__init()
-        self.pos_encoder = PositionalEncoder()
         self.encoder = TransformerEncoder()
         self.decoder = TransformerDecoder()
+        self.pos_enc = PositionalEncoder(embed_size, dropout, 400)
+        self.dropout = dropout
 
+    def forward(self, x, mask):
+        x = self.pos_enc(x)
+        x = self.encoder(x, mask)
+        x = self.decoder(x, mask)
 
-    def forward(self, input, output):
 
 
 class PositionalEncoder(nn.Module):
-    def __init(self, embed_size, dropout):
+    def __init(self, embed_size, dropout, max_len = 400):
         super(PositionalEncoder, self).__init()
-        
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, embed_size, 2) * -(math.log(10000.0) / embed_size))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
+        self.register_buffer('pe', pe)
+        self.dropout = dropout
 
     def forward(self, x):
+        return self.dropout(x + Variable(self.pe[:, :x.size(1)], requires_grad=False))
 
 class TransformerEncoder(nn.Module):
     def __init(self, layer, N):
@@ -43,6 +55,7 @@ class TransformerEncoder(nn.Module):
         self.norm = nn.LayerNorm(layer.shape, eps=1e-06)
 
     def forward(self, x, mask):
+
 
 
 class TransformerDecoder(nn.Module):
@@ -102,13 +115,27 @@ class DecLayer(nn.Module):
         return x
 
 class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, hidden_size, dropout, num_headz=8, embed_size, max_len = 400):
+        super(MultiHeadSelfAttention, self).__init__()
+        self.self_attn = SelfAttention(hidden_size, dropout, embed_size, max_len)
+        self.self_attn_list = nn.ModuleList([copy.deepcopy(self.self_attn) for _ in range(num_headz)])
 
-    def __init__(self, hidden_size, drop_prob):
-        super(SelfAttention, self).__init__()
-        self.blah = 0
 
     def forward(self, c, q, c_mask, q_mask):
         return 0
+
+class SelfAttention(nn.Module):
+    def __init__(self, hidden_size, dropout, embed_size, max_len):
+        super(SelfAttention, self).__init__()
+        self.W_v = nn.Linear(embed_size, hidden_size)
+        self.W_k = nn.Linear(embed_size, hidden_size)
+        self.W_q = nn.Linear(embed_size, hidden_size)
+        self.embed_size = embed_size
+
+    def forward(self, x):
+        K_x = self.W_k(x) # max_len 
+
+
 
 class FeedForward(nn.Module):
 
