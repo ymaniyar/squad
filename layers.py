@@ -13,6 +13,9 @@ from util import masked_softmax
 from cnn import CNN
 import json
 import spacy
+import numpy as np
+from spacy.tokens import Doc
+from spacy.attrs import LOWER, POS, ENT_TYPE, IS_ALPHA
 
 
 class Embedding(nn.Module):
@@ -32,7 +35,8 @@ class Embedding(nn.Module):
         self.embed_w = nn.Embedding.from_pretrained(word_vectors)
         self.embed_c = nn.Embedding.from_pretrained(char_vectors, freeze = False)
 
-        self.proj = nn.Linear(2 * word_vectors.size(1) + 1, hidden_size, bias=False)
+        # added 4 here bc we added 4 features (dep, dep head, pos, ner)
+        self.proj = nn.Linear(2 * word_vectors.size(1) + 4, hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
         # print("hidden_size: ", hidden_size)
         self.e_char = 64
@@ -40,20 +44,30 @@ class Embedding(nn.Module):
         self.m_word = 16
         self.cnn = CNN(self.e_char, self.e_word, self.m_word)
 
-        with open ('wordidx2posidx.json') as json_file: 
-            self.wordidx2posidx = json.load(json_file)
+        # with open ('wordidx2posidx.json') as json_file: 
+        #     self.wordidx2posidx = json.load(json_file)
 
         with open('idx2word.json') as json_file:
             self.idx2word = json.load(json_file)
-        print(len(self.idx2word))
+        # print(len(self.idx2word))
 
         with open('./data/word2idx.json') as json_file:
             self.word2idx = json.load(json_file)
+            self.word2idx[''] = -1
 
         with open('dep2idx.json') as json_file:
             self.dep2idx = json.load(json_file)
+            self.dep2idx[''] = -1
 
-        print(self.dep2idx)
+        with open('pos2idx.json') as json_file:
+            self.pos2idx = json.load(json_file)
+            self.pos2idx[''] = -1
+
+        # with open('ent2idx.json') as json_file:
+        #     self.ent2idx = json.load(json_file)
+        #     self.ent2idx[''] = -1
+
+        # print(self.dep2idx)
 
 
 
@@ -72,24 +86,14 @@ class Embedding(nn.Module):
 
         emb_w = emb_w.view(-1, self.e_word)
 
-        pos_list = [[float(self.wordidx2posidx[str(int(word))]) for word in sentence] for sentence in x_w]
+        # pos_list = [[float(self.wordidx2posidx[str(int(word))]) for word in sentence] for sentence in x_w]
 
-        # x_w = [batch_size, max_sen_len]
-        # reconstruct each sentence 
-        # for sentence_int in x_w:
-        #     sentence = ""
-        #     for word_int in sentence_int: 
-        #         sentence+= self.idx2word[str(int(word_int))]
-        #     print(sentence)
-
-        NULL_IDX = self.word2idx["--NULL--"]
-        OOV_IDX = self.word2idx["--OOV--"]
+        # NULL_IDX = self.word2idx["--NULL--"]
+        # OOV_IDX = self.word2idx["--OOV--"]
 
         # sentences = [[self.idx2word[str(int(word_int))] for word_int in sentence_int if int(word_int) != NULL_IDX and int(word_int) != OOV_IDX] for sentence_int in x_w]
         
         sentences_split = [[self.idx2word[str(int(word_int))] for word_int in sentence_int] for sentence_int in x_w]
-        # print(sentences[0])
-        # print(sentences[1])
 
         space = " "
         sentences = [space.join(sentences_split[i]) for i in range(len(sentences_split))]
@@ -97,90 +101,33 @@ class Embedding(nn.Module):
         # sentences = (batch_size, sentence_length)
         nlp = spacy.load('en')
 
-        # for sentence in sentences:
-        #     print(len(nlp(sentence)))
-        #     print(nlp(sentence))
-        #     break
-        #     if len(nlp(sentence))!=356:
-        #         print("wrong length!!!! fix")
-        #         print(len(nlp(sentence)))
-        #         print(nlp(sentence))
-            # for token in nlp(sentence):
-
-
-
-        # BUT WE NEED THIS TO BE THE SAME LENGTH FOR ALL SENTENCES!!!! SO ALL THE NULL, OOV tokens have to correspond to token.dep_ index of 0 or -1 for consistency
-        # figure out some way to re-append these tokens such that all of these lists are the same length (max_sen_len)
-        
-
-        for s, sentence in enumerate(sentences):
-            tokens = list(nlp(sentence))
-            print(type(tokens))
+        nlp_sentences = [nlp(space.join(sentences_split[i])) for i in range(len(sentences_split))]
+        for s, sentence in enumerate(nlp_sentences):
             sent_split = sentences_split[s]
-            # print("tokens: ", tokens, type(tokens))
-            # print(sent_split)
-
-            # if len(tokens) != len(sent_split):
-            #     tokens_new = []
-            #     offset = 0
-            #     for t, word in enumerate(sent_split):
-            #         tok = tokens[t+offset]
-            #         if word != str(tok):
-            #             offset += 1
-            #         else:
-            #             tokens_new.append(tok)
-            while len(tokens) != len(sent_split):
-                for t, tok in enumerate(tokens):
-                    if tok != sent_split[t]:
-                        tokens.pop(t)
-                        break
-            sentences[s] = space.join(tokens)
-
-        # for sentence in sentences:
-        #     print(len(sentence), len(nlp(sentences)))
+            if len(sentence)!= len(sent_split):
+                for i in range(0, len(sent_split)):
+                    if str(sentence[i])!=str(sent_split[i]):
+                        new_sentence = Doc(sentence.vocab, words = [word.text for t, word in enumerate(sentence) if t!=i])
+                        sentence = new_sentence
+                nlp_sentences[s] = sentence
 
 
+        tag_list = [[[float(self.dep2idx[token.dep_]), float(self.word2idx[token.head.text]), float(self.pos2idx[token.pos_]), float(1) if str(token) in [str(e) for e in sentence.ents] else float(0)] for token in sentence] for sentence in nlp_sentences] 
+        tags = torch.tensor(tag_list)
 
-        dep_list = [[[[self.dep2idx[token.dep_], self.word2idx[token.head.text]]] for token in nlp(sentence)] for sentence in sentences] # this doesn't account for all possible dep_parses 
-        
+        # ent_list = [[1 if str(token) in [str(e) for e in sentence.ents] else 0 for token in sentence] for sentence in nlp_sentences]
 
-
-        # head_list = [[[self.word2idx[token.head.text]] for token in nlp(sentence)] for sentence in sentences]
-        # print(len(dep_list), len(dep_list[0]))
-        # for thing in dep_list:
-        #     print(len(thing))
-        #     if (len(thing)!=356):
-        #         print("WRONG LENGTH!! SOS")
-        #         print(len(thing))
-        dep = torch.tensor(dep_list)
-        print(dep.shape)
-        head = torch.tensor(head_list)
-        print("sizes:" , dep.size(), head.size())
-
-
-
-
-        pos = torch.tensor(pos_list)
-        print(pos.size())
-        pos = pos.view(pos.shape[0], pos.shape[1], -1)
-        print("new size: ", pos.size())
-        pos = pos.view(-1, pos.shape[2])
-
-
-
-
-
-
-        
-        concatenated = torch.cat((x_conv_out_c, emb_w, x), 1)
+        # pos = torch.tensor(pos_list)
+        # pos = pos.view(pos.shape[0], pos.shape[1], -1)
+        # pos = pos.view(-1, pos.shape[2])
+        tags = tags.view(-1, tags.shape[2])        
+        concatenated = torch.cat((x_conv_out_c, emb_w, tags), 1)
 
         emb = F.dropout(concatenated, self.drop_prob, self.training)
         emb = self.proj(concatenated)
         emb = self.hwy(emb)
 
-        print(emb.size())
-
-        # emb_c = self.embed_c()
+        # print(emb.size())
 
         return emb
 
@@ -248,6 +195,9 @@ class RNNEncoder(nn.Module):
         x = pack_padded_sequence(x, lengths, batch_first=True)
 
         # Apply RNN
+        # print("passing into rnn: ", x)
+        # print("type: ", type(x))
+        # print("passing into rnn size: ", x.shape)
         x, _ = self.rnn(x)  # (batch_size, seq_len, 2 * hidden_size)
 
         # Unpack and reverse sort

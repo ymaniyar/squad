@@ -58,8 +58,8 @@ def createJsonfile():
 
         # print(idx2word[2])
 
-    # with open('idx2word.json', 'w') as outfile:
-    #     json.dump(idx2word, outfile)
+    with open('idx2word.json', 'w') as outfile:
+        json.dump(idx2word, outfile)
 
 
 
