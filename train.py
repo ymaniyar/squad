@@ -132,6 +132,7 @@ def main(args):
 
 
                 y1, y2 = y1.to(device), y2.to(device)
+                print('log_p1, log_p2, y1, y2: ', log_p1, log_p2, y1, y2)
                 loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
                 loss_val = loss.item()
 
