@@ -303,6 +303,7 @@ class Embedding(nn.Module):
         self.e_word = 300
         self.m_word = 16
         self.cnn = CNN(self.e_char, self.e_word, self.m_word)
+        self.nlp = spacy.load('en')
 
         with open('idx2word.json') as json_file:
             self.idx2word = json.load(json_file)
@@ -339,9 +340,9 @@ class Embedding(nn.Module):
         space = " "
         sentences = [space.join(sentences_split[i]) for i in range(len(sentences_split))]
 
-        nlp = spacy.load('en')
+        
 
-        nlp_sentences = [nlp(space.join(sentences_split[i])) for i in range(len(sentences_split))]
+        nlp_sentences = [self.nlp(space.join(sentences_split[i])) for i in range(len(sentences_split))]
         for s, sentence in enumerate(nlp_sentences):
             sent_split = sentences_split[s]
             if len(sentence)!= len(sent_split):
