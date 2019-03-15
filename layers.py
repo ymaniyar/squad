@@ -242,12 +242,12 @@ class FeedForward(nn.Module):
 
 
 class PositionalEncoder(nn.Module):
-    def __init__(self, hidden_size, dropout, max_len=500):
+    def __init__(self, hidden_size, dropout, max_len=400):
         super(PositionalEncoder, self).__init__()
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         pe = torch.zeros((max_len, hidden_size), device=device)
-        position = torch.arange((0., max_len), device=device).unsqueeze(1)
-        div_term = torch.exp(torch.arange((0., hidden_size, 2), device=device) * -(math.log(10000.0) / hidden_size))
+        position = torch.arange(0., max_len, device=device).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0., hidden_size, 2, device=device) * -(math.log(10000.0) / hidden_size))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
