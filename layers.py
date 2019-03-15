@@ -7,6 +7,7 @@ Author:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import time
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch.autograd import Variable
@@ -22,7 +23,7 @@ import copy
 
 class Transformer(nn.Module):
 
-    def __init__(self, hidden_size, dropout_prob = 0.1, num_layers = 7): 
+    def __init__(self, hidden_size, dropout_prob = 0.1, num_layers = 3): 
         super(Transformer, self).__init__()
 
         self.dropout = nn.Dropout(p = dropout_prob)
@@ -34,23 +35,33 @@ class Transformer(nn.Module):
         # embedding: batch * seq_len * embed_size (word + chars + 4)
 
     def forward(self, x, pad_mask, batch_size, max_len):
+        start = time.clock() 
         x = self.pos_enc(x)
+        end_pos = time.clock() 
         x = self.encoder(x, batch_size, pad_mask, max_len)
+        end_enc = time.clock() 
         x = self.decoder(x, batch_size, pad_mask, max_len)
+        end_dec = time.clock()
 
         m_0 = x
 
-        x = self.pos_enc(x)
+        # x = self.pos_enc(x)
         x = self.encoder(x, batch_size, pad_mask, max_len)
         x = self.decoder(x, batch_size, pad_mask, max_len)
 
         m_1 = x
 
-        x = self.pos_enc(x)
+        # x = self.pos_enc(x)
         x = self.encoder(x, batch_size, pad_mask, max_len)
         x = self.decoder(x, batch_size, pad_mask, max_len)
 
         m_2 = x
+
+        end = time.clock() 
+        print("transformer forward pass: ", end-start)
+        print("pos enc forward pass: ", end_pos-start)
+        print("encoder forward pass: ", end_enc-end_pos)
+        print("decoder forward pass: ", end_dec-end_enc)
 
         return m_0, m_1, m_2
 
@@ -86,7 +97,7 @@ class TransformerDecoder(nn.Module):
         return self.norm(x)
 
 class EncLayer(nn.Module):
-    def __init__(self, dropout, hidden_size, num_headz = 8):
+    def __init__(self, dropout, hidden_size, num_headz = 6):
         super(EncLayer, self).__init__()
 
         self.self_att = MultiHeadSelfAttention(dropout, hidden_size)
@@ -120,7 +131,7 @@ def make_sub_mask(seq):
     return subsequent_mask
 
 class DecLayer(nn.Module):
-    def __init__(self, dropout, hidden_size, num_headz = 8):
+    def __init__(self, dropout, hidden_size, num_headz = 6):
         super(DecLayer, self).__init__()
 
         self.masked_self_att = MultiHeadSelfAttention(dropout, hidden_size)
@@ -152,7 +163,7 @@ class DecLayer(nn.Module):
         return x
 
 class MultiHeadSelfAttention(nn.Module):
-    def __init__(self, dropout, hidden_size, num_headz=8):
+    def __init__(self, dropout, hidden_size, num_headz=6):
         super(MultiHeadSelfAttention, self).__init__()
 
         self.self_attn = SelfAttention(dropout, hidden_size, hidden_size)
@@ -324,6 +335,7 @@ class Embedding(nn.Module):
 
 
     def forward(self, x_w, x_c):
+        start = time.clock()
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         emb_w = self.embed_w(x_w)  # (batch_size, seq_len, embed_size)
@@ -363,7 +375,9 @@ class Embedding(nn.Module):
         emb = F.dropout(concatenated, self.drop_prob, self.training)
         emb = self.proj(concatenated)
         emb = self.hwy(emb)
+        end = time.clock()
 
+        print("embedding forward pass: ", end-start)
 
         return emb
 
