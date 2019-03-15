@@ -166,43 +166,69 @@ class MultiHeadSelfAttention(nn.Module):
     def __init__(self, dropout, hidden_size, num_headz=6):
         super(MultiHeadSelfAttention, self).__init__()
 
-        self.self_attn = SelfAttention(dropout, hidden_size, hidden_size)
-        self.self_attn_list = nn.ModuleList([copy.deepcopy(self.self_attn) for _ in range(num_headz)])
+        # self.self_attn = SelfAttention(dropout, hidden_size, hidden_size)
+        self.attn = ScaledDotProductAttention(hidden_size)
+        # self.self_attn_list = nn.ModuleList([copy.deepcopy(self.attn) for _ in range(num_headz)])
         self.dropout = dropout
-        self.W_O = nn.Linear(num_headz * hidden_size, hidden_size)
-        nn.init.xavier_normal_(self.W_O.weight)
+        self.W_v = nn.Linear(hidden_size, num_headz*hidden_size) # check on the second dimension of this - potentially d_k? hidden size? unclear
+        self.W_k = nn.Linear(hidden_size, num_headz*hidden_size)
+        self.W_q = nn.Linear(hidden_size, num_headz*hidden_size)
+        self.W_o = nn.Linear(num_headz * hidden_size, hidden_size)
+        self.n_heads = num_headz
+        self.hidden_size = hidden_size
+        nn.init.xavier_normal_(self.W_o.weight)
 
 
     def forward(self, x, batch_size, pad_mask, max_len, sub_mask = None):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        att_heads = torch.tensor([[[]] * max_len] * batch_size, device=device)
+        v = self.W_v(x)
+        k = self.W_k(x)
+        q = self.W_q(x)
 
-        for i, self_att in enumerate(self.self_attn_list):
-            att_head = self_att(x, pad_mask, sub_mask)
-            att_heads = torch.cat((att_heads, att_head), 2)
+        v = v.view(batch_size, max_len, self.n_heads, self.hidden_size)
+        k = k.view(batch_size, max_len, self.n_heads, self.hidden_size)
+        q = q.view(batch_size, max_len, self.n_heads, self.hidden_size)
 
-        att = self.W_O(att_heads)
+        v = v.permute(2, 0, 1, 3).contiguous().view(-1, max_len, self.hidden_size) #b_sz * n_hds, maxlen, hd_sz
+        k = k.permute(2, 0, 1, 3).contiguous().view(-1, max_len, self.hidden_size)
+        q = q.permute(2, 0, 1, 3).contiguous().view(-1, max_len, self.hidden_size)
+
+
+        if sub_mask is not None: 
+            sub_mask = sub_mask.repeat(self.n_heads, 1, 1)
+        pad_mask = pad_mask.repeat(self.n_heads, 1, 1)
+
+
+
+        att_heads = self.attn(k, v, q, pad_mask, sub_mask) #b_sz*n_hds, max_len, hd_sz
+        # att_heads = torch.tensor([[[]] * max_len] * batch_size, device=device)
+
+        # for i, self_att in enumerate(self.self_attn_list):
+        #     att_head = self_att(x, pad_mask, sub_mask)
+        #     att_heads = torch.cat((att_heads, att_head), 2)
+        att_heads = att_heads.view(batch_size, max_len, self.n_heads*self.hidden_size)
+        att = self.W_o(att_heads)
 
         return att # batch_size, max_seq_len, n_headz * d_k
 
 class SelfAttention(nn.Module):
     def __init__(self, dropout, hidden_size, d_k):
         super(SelfAttention, self).__init__()
-        self.W_v = nn.Linear(hidden_size, d_k) # check on the second dimension of this - potentially d_k? hidden size? unclear
-        self.W_k = nn.Linear(hidden_size, d_k)
-        self.W_q = nn.Linear(hidden_size, d_k)
-        nn.init.xavier_normal_(self.W_v.weight)
-        nn.init.xavier_normal_(self.W_k.weight)
-        nn.init.xavier_normal_(self.W_q.weight)
+        # self.W_v = nn.Linear(hidden_size, d_k) # check on the second dimension of this - potentially d_k? hidden size? unclear
+        # self.W_k = nn.Linear(hidden_size, d_k)
+        # self.W_q = nn.Linear(hidden_size, d_k)
+        # nn.init.xavier_normal_(self.W_v.weight)
+        # nn.init.xavier_normal_(self.W_k.weight)
+        # nn.init.xavier_normal_(self.W_q.weight)
 
 
         self.hidden_size = hidden_size
         self.scaled_dot_prod = ScaledDotProductAttention(d_k)
 
     def forward(self, x, pad_mask, sub_mask = None):
-        K_x = self.W_k(x) # batch_size * max_seq_len * d_k
-        V_x = self.W_v(x) # batch_size * max_seq_len * d_k
-        Q_x = self.W_q(x) # batch_size * max_seq_len * d_k
+        # K_x = self.W_k(x) # batch_size * max_seq_len * d_k
+        # V_x = self.W_v(x) # batch_size * max_seq_len * d_k
+        # Q_x = self.W_q(x) # batch_size * max_seq_len * d_k
 
         att = self.scaled_dot_prod(K_x, V_x, Q_x, pad_mask, sub_mask)
         return att # batch_size * max_seq_len, d_k
@@ -236,19 +262,16 @@ class FeedForward(nn.Module):
     def __init__(self, hidden_size, dropout, ff_size = 128, ff_size2 = 64):
         super(FeedForward, self).__init__()
         self.W1 = nn.Linear(hidden_size, ff_size)
-        self.W2 = nn.Linear(ff_size, ff_size2)
-        self.W3 = nn.Linear(ff_size2, hidden_size)
+        self.W2 = nn.Linear(ff_size, hidden_size)
         nn.init.xavier_normal_(self.W1.weight)
         nn.init.xavier_normal_(self.W2.weight)
-        nn.init.xavier_normal_(self.W3.weight)
 
         self.dropout = dropout
 
 
     def forward(self, x):
-        x_2 = self.dropout(F.relu(self.W1(x)))
-        x_3 = self.dropout(F.relu(self.W2(x_2)))
-        return self.W3(x_3)
+        x = self.dropout(F.relu(self.W1(x)))
+        return self.W2(x)
 
 
 
