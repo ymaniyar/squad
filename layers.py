@@ -323,7 +323,7 @@ class Embedding(nn.Module):
 
 
     def forward(self, x_w, x_c):
-
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         emb_w = self.embed_w(x_w)  # (batch_size, seq_len, embed_size)
         emb_c = self.embed_c(x_c) 
@@ -353,7 +353,7 @@ class Embedding(nn.Module):
 
 
         tag_list = [[[float(self.dep2idx[token.dep_]) if token.dep_ in self.dep2idx else -1, float(self.word2idx[token.head.text]) if token.head.text in self.word2idx else -1, float(self.pos2idx[token.pos_]) if token.pos_ in self.pos2idx else -1, float(1) if str(token) in [str(e) for e in sentence.ents] else float(0)] for token in sentence] for sentence in nlp_sentences] 
-        tags = torch.tensor(tag_list)
+        tags = torch.tensor(tag_list, device=device)
 
 
         tags = tags.view(-1, tags.shape[2])        
