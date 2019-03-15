@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 
 
-class BiDAF(nn.Module):
+class Transformer(nn.Module):
     """Baseline BiDAF model for SQuAD.
     Based on the paper:
     "Bidirectional Attention Flow for Machine Comprehension"
@@ -26,7 +26,7 @@ class BiDAF(nn.Module):
         drop_prob (float): Dropout probability.
     """
     def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0.):
-        super(BiDAF, self).__init__()
+        super(Transformer, self).__init__()
 
         # print("vectors: ", word_vectors)
         self.emb = layers.Embedding(word_vectors=word_vectors,
@@ -44,8 +44,8 @@ class BiDAF(nn.Module):
 
         self.transformer = layers.Transformer(hidden_size)
 
-        self.att = layers.BiDAFAttention(hidden_size= hidden_size,
-                                         drop_prob=drop_prob)
+        # self.att = layers.BiDAFAttention(hidden_size= hidden_size,
+                                         # drop_prob=drop_prob)
 
         self.mod = layers.RNNEncoder(input_size=4 * hidden_size,
                                      hidden_size=hidden_size,
@@ -101,7 +101,7 @@ class BiDAF(nn.Module):
         # print("c_mask: ", c_mask.size())
         # c_mask = c_mask.unsqueeze(2).expand(-1, -1, c_max_len)
         c_mask = c_mask.unsqueeze(2)
-        q_mask = q_mask.unsqueeze(2).expand(-1, -1, q_max_len)
+        q_mask = q_mask.unsqueeze(2)
         print("c_mask size 1: ", c_mask.size())
         c_mask = 1 - c_mask
         q_mask = 1 - q_mask
@@ -121,13 +121,17 @@ class BiDAF(nn.Module):
         print("c0, c1, c2: ", c_0.shape, c_1.shape, c_2.shape)
 
         m_0 = torch.cat((c_0, q_0), 1)
-        m_1 = torch.cat((c_0, q_0), 1)
-        m_2 = torch.cat((c_0, q_0), 1)
+        m_1 = torch.cat((c_1, q_1), 1)
+        m_2 = torch.cat((c_2, q_2), 1)
         print("c0, c1, c2: ", m_0.shape, m_1.shape, m_2.shape)
 
         out = self.out(m_0, m_1, m_2)
 
-        print('out: ', out[0].shape)
+        # print('out: ', out[0].shape)
+
+        # print("new output maybe: ", torch.exp(out[0]))
+        # print("new output maybe 2: ", torch.exp(out[1]))
+        # return ((torch.exp(out[0]), torch.exp(out[1])))
 
         return out
 

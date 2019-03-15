@@ -36,11 +36,10 @@ class Transformer(nn.Module):
     def forward(self, x, pad_mask, batch_size, max_len):
         # print("x in transformer forward: ", x.size())
         x = self.pos_enc(x)
-        print('x1: ', x)
+        # print('x1: ', x)
         x = self.encoder(x, batch_size, pad_mask, max_len)
-        print('x2: ', x)
-        print("exiting encoder")
-        return; 
+        # print('x2: ', x)
+        # print("exiting encoder")
         x = self.decoder(x, batch_size, pad_mask, max_len)
 
         m_0 = x
@@ -103,35 +102,50 @@ class EncLayer(nn.Module):
         self.feed_fwd = FeedForward(hidden_size, dropout)
         self.dropout = dropout
         self.norm = nn.LayerNorm(hidden_size, eps=1e-06)
+        self.norm2 = nn.BatchNorm2d(hidden_size, eps = 1e-06)
         self.size = hidden_size
 
     def forward(self, x, batch_size, pad_mask, max_len):
         res1 = x
         x = self.self_att(x, batch_size, pad_mask, max_len)
+        # x = x.unsqueeze(-1)
 
-        print("x selfatt IN ENC LAYER FORWARD: ", x)
-        # return; 
+        # print("x selfatt IN ENC LAYER FORWARD: ", x, x.size())
+        # return;
+        # norm2 = nn.BatchNorm2d(x.size()[1])
+        # y = norm2(x)
+        # print("y norm2 in ENC LAYER FORWARD: ", y)
         x = self.norm(x)
-        print("x norm: ", x)
+
+        # print("x norm in ENC LAYER FORWARD: ", z)
+
+
+
         x = self.dropout(x)
+        # print("x dropout in ENC LAYER FORWARD: ", x)
+
         # res2 = x
         res2 = res1 + x
         # print("x after res2: ", x.size())
         x = self.feed_fwd(x)
-        print("x feedfwd: ", x)
+        # print("x feedfwd: ", x)
         x = self.norm(x)
+
+        # print("norm 2 x: ", x, x.size())
 
         x = self.dropout(x)
         x += res2 
+
+        # print("final x: ", x, x.size())
         return x
 
 def make_sub_mask(seq):
-    print("seq: ", seq, type(seq))
+    # print("seq: ", seq, type(seq))
     sz_b, len_s = seq.size()[0], seq.size()[1]
     # subsequent_mask = torch.tril(torch.ones((len_s, len_s), device = seq.device, dtype = torch.uint8), diagonal=0)
     subsequent_mask = torch.tril(torch.ones((len_s, 1), device = seq.device, dtype = torch.uint8), diagonal=0)
-    print("sub mask in make mask: ", subsequent_mask)
-    print("sub mask size in make mask: ", subsequent_mask.size())
+    # print("sub mask in make mask: ", subsequent_mask)
+    # print("sub mask size in make mask: ", subsequent_mask.size())
     subsequent_mask = subsequent_mask.unsqueeze(0).expand(sz_b, -1, -1) 
     return subsequent_mask
 
@@ -149,13 +163,13 @@ class DecLayer(nn.Module):
     def forward(self, x, pad_mask, batch_size, max_len):
         res1 = x
         sub_mask = make_sub_mask(x)
-        print('sub_mask dec', sub_mask, sub_mask.shape) # (10, 203, 203)
-        print('pad_mask dec', pad_mask, pad_mask.shape) # (10, 203, 203)
+        # print('sub_mask dec', sub_mask, sub_mask.shape) # (10, 203, 203)
+        # print('pad_mask dec', pad_mask, pad_mask.shape) # (10, 203, 203)
 
         # print("sub_mask before bit operation: ", sub_mask.size())
         sub_mask = 1 - sub_mask
         mask = sub_mask | pad_mask # (10, 203, 203)
-        print('mask dec', mask, mask.shape) 
+        # print('mask dec', mask, mask.shape) 
         
         # combination of pad_mask and sub_mask
         # print("mask dim: ", mask.size())
@@ -163,13 +177,13 @@ class DecLayer(nn.Module):
         #mask = pad_mask & sub_mask 
         # print("batch_size: ", batch_size)
         # print("pad mask: ", pad_mask)
-        x = self.masked_self_att(x, batch_size, pad_mask, max_len, mask)
-        # x = self.masked_self_att(x, batch_size, pad_mask, max_len) # using this line removes NAN! 
+        # x = self.masked_self_att(x, batch_size, pad_mask, max_len, mask)
+        x = self.masked_self_att(x, batch_size, pad_mask, max_len) # using this line removes NAN! 
         x = self.norm(x)
         x = self.dropout(x)
         res2 = res1 + x
-        print('res2 ', res2)
-        print('padmask ', pad_mask)
+        # print('res2 ', res2)
+        # print('padmask ', pad_mask)
         x = res2
         x = self.self_att(x, batch_size, pad_mask, max_len)
         x = self.norm(x)
@@ -203,29 +217,36 @@ class MultiHeadSelfAttention(nn.Module):
 
         # print("att_heads size: ", att_heads.size())
         for i, self_att in enumerate(self.self_attn_list):
-            print('attn ', i)
+            # print('attn ', i)
             att_head = self_att(x, pad_mask, sub_mask)
             # print("att_head (SINGULAR) size: ", att_head)
-            print("att head in mhm forward: ", att_head, att_head.size())
+            # print("att head in mhm forward: ", att_head, att_head.size())
             att_heads = torch.cat((att_heads, att_head), 2)
 
-        print("att headSSSSS in mhm forward: ", att_heads, att_heads.size())
+        # print("att headSSSSS in mhm forward: ", att_heads, att_heads.size())
         # return; 
         # print("att_heads dim: ", att_heads.size())
         att = self.W_O(att_heads)
-        print("att in mhm forward: ", att, att.size())
+        # print("att in mhm forward: ", att, att.size())
+        # print("pad_mask size: ", pad_mask.size())
         # print("att final dim: ", att.size())
 
-        if sub_mask is not None: 
-            # sub_mask = sub_mask.unsqueeze(2)
-            att = att.masked_fill(sub_mask, -np.inf)
-            # print('sub_mask in dot: ', sub_mask, sub_mask.size())
-            # print("x in dot: ", x, x.size())
-            # return; 
-        else: 
-            att = att.masked_fill(pad_mask, -np.inf)
-            # print("att in mhm forward!!!!!!: ", att, att.size())
-        print("att in mhm forward final: ", att, att.size())
+        # if sub_mask is not None: 
+        #     # sub_mask = sub_mask.unsqueeze(2)
+        #     # att = att.data.masked_fill(sub_mask, -np.inf)
+        #     # att = att.data.masked_fill_(sub_mask.byte(), -float('inf'))
+        #     att = att.data.masked_fill_(sub_mask.byte(), -1e9)
+
+        #     # print('sub_mask in dot: ', sub_mask, sub_mask.size())
+        #     # print("x in dot: ", x, x.size())
+        #     # return; 
+        # else: 
+        #     # att = att.data.masked_fill(pad_mask, -np.inf)
+        #     # att = att.data.masked_fill_(pad_mask.byte(), -float('inf'))
+        #     att = att.data.masked_fill_(pad_mask.byte(), -1e9)
+
+        #     # print("att in mhm forward!!!!!!: ", att, att.size())
+        # print("att in mhm forward final: ", att, att.size())
         # return; 
         return att; 
         # return att_heads # batch_size, max_seq_len, n_headz * d_k
@@ -264,61 +285,15 @@ class ScaledDotProductAttention(nn.Module):
         x = torch.bmm(q, torch.transpose(k, 1, 2)) # (batch_size, max_seq_len, max_seq_len)
         # do mask thing???? 
 
-
-        # print("x size: ", x.size())
-        # if sub_mask is not None: 
-            # print("submask size: ", sub_mask.size())
-        # else: 
-            # print("submask is none!")
-        # print("padmask size: ", pad_mask.size())
-        # print("k size: ", k.size())
-        # print("v size: ", v.size())
-        # print("q size: ", q.size())
-        # pad_mask = pad_mask.squeeze(2)
-
-        # print('pad_mask in dot: ', pad_mask, pad_mask.shape)
-        # if sub_mask is not None: 
-        #     # sub_mask = sub_mask.unsqueeze(2)
-        #     x = x.masked_fill(sub_mask, -np.inf)
-        #     print('sub_mask in dot: ', sub_mask, sub_mask.size())
-        #     print("x in dot: ", x, x.size())
-        #     # return; 
-        # else: 
-        #     x = x.masked_fill(pad_mask, -np.inf)
-
+        if sub_mask is not None: 
+            x = x.data.masked_fill_(sub_mask.byte(), -1e9)
+        else: 
+            x = x.data.masked_fill_(pad_mask.byte(), -1e9)
 
         x /= math.sqrt(self.d_k) # same dim as above
-        print("x in dot 2: ", x, x.size())
         x = F.softmax(x) # same dim as above
-        print("x in dot 3: ", x, x.size())
 
-        # if sub_mask is not None: 
-        #     # sub_mask = sub_mask.unsqueeze(2)
-        #     x = x.masked_fill(sub_mask, -np.inf)
-        #     print('sub_mask in dot: ', sub_mask, sub_mask.size())
-        #     print("x in dot: ", x, x.size())
-        #     # return; 
-        # else: 
-        #     x = x.masked_fill(pad_mask, -np.inf)
-
-        print("x in dot 4: ", x, x.size())
-
-
-        print("v: ", v, v.size())
         att = torch.bmm(x, v) # batch_size, max_seq_len , d_k
-        print('x att: ', att, att.shape)
-
-        # if sub_mask is not None: 
-        #     # sub_mask = sub_mask.unsqueeze(2)
-        #     att = att.masked_fill(sub_mask, -np.inf)
-        #     # print('sub_mask in dot: ', sub_mask, sub_mask.size())
-        #     # print("x in dot: ", x, x.size())
-        #     # return; 
-        # else: 
-        #     att = att.masked_fill(pad_mask, -np.inf)
-        #     print("att in pad_mask thing: ", att, att.size())
-            # return; 
-        print("att after doing operation: ", att, att.size())
 
         return att # batch_size, max_seq_len , d_k
 
@@ -375,10 +350,12 @@ class TransformerOutput(nn.Module):
     def forward(self, m_0, m_1, m_2):
         m_01 = torch.cat((m_0, m_1), 1)
         m_02 = torch.cat((m_0, m_2), 1)
-        print('m_01: ', m_01)
-        p1 = F.softmax(self.W1(m_01), 1)
+        # print('m_01: ', m_01)
+
+        p1 = F.log_softmax(self.W1(m_01), 1)
+        # p1 = masked_softmax(self.W1(m_01), 1)
         print('p1: ', p1)
-        p2 = F.softmax(self.W1(m_02), 1)
+        p2 = F.log_softmax(self.W1(m_02), 1)
         p1 = p1.squeeze(2)
         p2 = p2.squeeze(2)
         print('p1: ', p1)
