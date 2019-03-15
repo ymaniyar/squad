@@ -16,7 +16,7 @@ import util
 from args import get_train_args
 from collections import OrderedDict
 from json import dumps
-from models import BiDAF
+from models import Transformer
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
@@ -54,7 +54,7 @@ def main(args):
     # model = BiDAF(word_vectors=word_vectors,
     #               hidden_size=args.hidden_size,
     #               drop_prob=args.drop_prob)
-    model = BiDAF(word_vectors=word_vectors,
+    model = Transformer(word_vectors=word_vectors,
                   char_vectors = char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
@@ -130,9 +130,14 @@ def main(args):
 
                 log_p1, log_p2 = model(cw_idxs, qw_idxs, cc_idxs, qc_idxs)
 
-
+                # print('our output dimensions: ', log_p1.size())
                 y1, y2 = y1.to(device), y2.to(device)
                 print('log_p1, log_p2, y1, y2: ', log_p1, log_p2, y1, y2)
+                print("size of log_p1, log_p2, y1, y2: ", log_p1.size(), log_p2.size(), y1.size(), y2.size())
+
+                # return; 
+                print("loss 1: ", F.nll_loss(log_p1, y1))
+                print("loss 2: ", F.nll_loss(log_p2, y2))
                 loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
                 loss_val = loss.item()
 
