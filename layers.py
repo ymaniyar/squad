@@ -35,13 +35,13 @@ class Transformer(nn.Module):
         # embedding: batch * seq_len * embed_size (word + chars + 4)
 
     def forward(self, x, pad_mask, batch_size, max_len):
-        start = time.clock() 
+        # start = time.clock() 
         x = self.pos_enc(x)
-        end_pos = time.clock() 
+        # end_pos = time.clock() 
         x = self.encoder(x, batch_size, pad_mask, max_len)
-        end_enc = time.clock() 
+        # end_enc = time.clock() 
         x = self.decoder(x, batch_size, pad_mask, max_len)
-        end_dec = time.clock()
+        # end_dec = time.clock()
 
         m_0 = x
 
@@ -57,11 +57,11 @@ class Transformer(nn.Module):
 
         m_2 = x
 
-        end = time.clock() 
-        print("transformer forward pass: ", end-start)
-        print("pos enc forward pass: ", end_pos-start)
-        print("encoder forward pass: ", end_enc-end_pos)
-        print("decoder forward pass: ", end_dec-end_enc)
+        # end = time.clock() 
+        # print("transformer forward pass: ", end-start)
+        # print("pos enc forward pass: ", end_pos-start)
+        # print("encoder forward pass: ", end_enc-end_pos)
+        # print("decoder forward pass: ", end_dec-end_enc)
 
         return m_0, m_1, m_2
 
@@ -335,7 +335,7 @@ class Embedding(nn.Module):
 
 
     def forward(self, x_w, x_c):
-        start = time.clock()
+        # start = time.clock()
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         emb_w = self.embed_w(x_w)  # (batch_size, seq_len, embed_size)
@@ -375,9 +375,9 @@ class Embedding(nn.Module):
         emb = F.dropout(concatenated, self.drop_prob, self.training)
         emb = self.proj(concatenated)
         emb = self.hwy(emb)
-        end = time.clock()
+        # end = time.clock()
 
-        print("embedding forward pass: ", end-start)
+        # print("embedding forward pass: ", end-start)
 
         return emb
 
