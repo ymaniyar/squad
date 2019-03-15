@@ -163,7 +163,7 @@ class MultiHeadSelfAttention(nn.Module):
 
 
     def forward(self, x, batch_size, pad_mask, max_len, sub_mask = None):
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         att_heads = torch.tensor([[[]] * max_len] * batch_size, device=device)
 
         for i, self_att in enumerate(self.self_attn_list):
@@ -244,10 +244,10 @@ class FeedForward(nn.Module):
 class PositionalEncoder(nn.Module):
     def __init__(self, hidden_size, dropout, max_len=400):
         super(PositionalEncoder, self).__init__()
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         pe = torch.zeros((max_len, hidden_size), device=device)
-        position = torch.arange(0., max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0., hidden_size, 2) * -(math.log(10000.0) / hidden_size))
+        position = torch.arange(0., max_len, device=device).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0., hidden_size, 2, device=device) * -(math.log(10000.0) / hidden_size))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
@@ -323,7 +323,7 @@ class Embedding(nn.Module):
 
 
     def forward(self, x_w, x_c):
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         emb_w = self.embed_w(x_w)  # (batch_size, seq_len, embed_size)
         emb_c = self.embed_c(x_c) 
@@ -461,7 +461,7 @@ class BiDAFAttention(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob=0.1):
         super(BiDAFAttention, self).__init__()
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.drop_prob = drop_prob
         self.c_weight = nn.Parameter(torch.zeros((hidden_size, 1), device=device))
         self.q_weight = nn.Parameter(torch.zeros((hidden_size, 1), device=device))
