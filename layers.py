@@ -244,8 +244,8 @@ class FeedForward(nn.Module):
 class PositionalEncoder(nn.Module):
     def __init__(self, hidden_size, dropout, max_len=400):
         super(PositionalEncoder, self).__init__()
-        
-        pe = torch.zeros(max_len, hidden_size)
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        pe = torch.zeros((max_len, hidden_size), device=device)
         position = torch.arange(0., max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0., hidden_size, 2) * -(math.log(10000.0) / hidden_size))
         pe[:, 0::2] = torch.sin(position * div_term)
@@ -461,13 +461,14 @@ class BiDAFAttention(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob=0.1):
         super(BiDAFAttention, self).__init__()
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.drop_prob = drop_prob
-        self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
-        self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
-        self.cq_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
+        self.c_weight = nn.Parameter(torch.zeros((hidden_size, 1), device=device))
+        self.q_weight = nn.Parameter(torch.zeros((hidden_size, 1), device=device))
+        self.cq_weight = nn.Parameter(torch.zeros((1, 1, hidden_size), device=device))
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
-        self.bias = nn.Parameter(torch.zeros(1))
+        self.bias = nn.Parameter(torch.zeros(1, device=device))
 
     def forward(self, c, q, c_mask, q_mask):
         batch_size, c_len, _ = c.size()
