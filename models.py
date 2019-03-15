@@ -95,18 +95,18 @@ class Transformer(nn.Module):
 
         batch_size_c = c_emb.size()[0]
         batch_size_q = q_emb.size()[0]
-        print("c_mask size 0: ", c_mask.size())
+        # print("c_mask size 0: ", c_mask.size())
 
         # print("c_emb: ", c_emb.size())
         # print("c_mask: ", c_mask.size())
         # c_mask = c_mask.unsqueeze(2).expand(-1, -1, c_max_len)
         c_mask = c_mask.unsqueeze(2)
         q_mask = q_mask.unsqueeze(2)
-        print("c_mask size 1: ", c_mask.size())
+        # print("c_mask size 1: ", c_mask.size())
         c_mask = 1 - c_mask
         q_mask = 1 - q_mask
 
-        print("c_mask size 2: ", c_mask.size())
+        # print("c_mask size 2: ", c_mask.size())
         # print("c_mask: ", c_mask) 
         # print("batch_size_c: ", batch_size_c)
 
@@ -118,12 +118,12 @@ class Transformer(nn.Module):
         # print("q_out size: ", q_out.size())
         # print("c_enc: ", c_enc.size())
         # print("q_enc: ", q_enc.size())
-        print("c0, c1, c2: ", c_0.shape, c_1.shape, c_2.shape)
+        #print("c0, c1, c2: ", c_0.shape, c_1.shape, c_2.shape)
 
         m_0 = torch.cat((c_0, q_0), 1)
         m_1 = torch.cat((c_1, q_1), 1)
         m_2 = torch.cat((c_2, q_2), 1)
-        print("c0, c1, c2: ", m_0.shape, m_1.shape, m_2.shape)
+        #print("c0, c1, c2: ", m_0.shape, m_1.shape, m_2.shape)
 
         out = self.out(m_0, m_1, m_2)
 

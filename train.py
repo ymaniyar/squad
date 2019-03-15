@@ -76,8 +76,9 @@ def main(args):
                                  log=log)
 
     # Get optimizer and scheduler
-    optimizer = optim.Adadelta(model.parameters(), args.lr,
-                               weight_decay=args.l2_wd)
+    # optimizer = optim.Adadelta(model.parameters(), args.lr,
+    #                            weight_decay=args.l2_wd)
+    optimizer = optim.Adam(model.parameters(), args.lr, weight_decay = args.l2_wd)
     scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
     # Get data loader
@@ -132,12 +133,12 @@ def main(args):
 
                 # print('our output dimensions: ', log_p1.size())
                 y1, y2 = y1.to(device), y2.to(device)
-                print('log_p1, log_p2, y1, y2: ', log_p1, log_p2, y1, y2)
-                print("size of log_p1, log_p2, y1, y2: ", log_p1.size(), log_p2.size(), y1.size(), y2.size())
+                # print('log_p1, log_p2, y1, y2: ', log_p1, log_p2, y1, y2)
+                # print("size of log_p1, log_p2, y1, y2: ", log_p1.size(), log_p2.size(), y1.size(), y2.size())
 
                 # return; 
-                print("loss 1: ", F.nll_loss(log_p1, y1))
-                print("loss 2: ", F.nll_loss(log_p2, y2))
+                # print("loss 1: ", F.nll_loss(log_p1, y1))
+                # print("loss 2: ", F.nll_loss(log_p2, y2))
                 loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
                 loss_val = loss.item()
 

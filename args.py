@@ -99,15 +99,15 @@ def get_train_args():
                         help='Number of steps between successive evaluations.')
     parser.add_argument('--lr',
                         type=float,
-                        default=0.2,
+                        default=0.05,
                         help='Learning rate.')
     parser.add_argument('--l2_wd',
                         type=float,
-                        default=0,
+                        default=1e-7,
                         help='L2 weight decay.')
     parser.add_argument('--num_epochs',
                         type=int,
-                        default=1,
+                        default=10,
                         help='Number of epochs for which to train. Negative means forever.')
     parser.add_argument('--drop_prob',
                         type=float,

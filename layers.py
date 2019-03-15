@@ -22,7 +22,7 @@ import copy
 
 class Transformer(nn.Module):
 
-    def __init__(self, hidden_size, dropout_prob = 0.1, num_layers = 6): 
+    def __init__(self, hidden_size, dropout_prob = 0.1, num_layers = 7): 
         super(Transformer, self).__init__()
 
         self.dropout = nn.Dropout(p = dropout_prob)
@@ -34,16 +34,11 @@ class Transformer(nn.Module):
         # embedding: batch * seq_len * embed_size (word + chars + 4)
 
     def forward(self, x, pad_mask, batch_size, max_len):
-        # print("x in transformer forward: ", x.size())
         x = self.pos_enc(x)
-        # print('x1: ', x)
         x = self.encoder(x, batch_size, pad_mask, max_len)
-        # print('x2: ', x)
-        # print("exiting encoder")
         x = self.decoder(x, batch_size, pad_mask, max_len)
 
         m_0 = x
-        # print('m_0: ', m_0)
 
         x = self.pos_enc(x)
         x = self.encoder(x, batch_size, pad_mask, max_len)
@@ -71,10 +66,7 @@ class TransformerEncoder(nn.Module):
 
     def forward(self, x, batch_size, pad_mask, max_len):
         for i, layer in enumerate(self.layers): 
-            print('enc ', i)
             x = layer(x, batch_size, pad_mask, max_len)
-            # print('x : ', x)
-        # print('x encoder: ', x)
         x =  self.norm(x)
         return x
 
@@ -90,7 +82,6 @@ class TransformerDecoder(nn.Module):
 
     def forward(self, x, batch_size, pad_mask, max_len):
         for i, layer in enumerate(self.layers):
-            print('dec ', i)
             x = layer(x, pad_mask, batch_size, max_len)
         return self.norm(x)
 
@@ -108,44 +99,23 @@ class EncLayer(nn.Module):
     def forward(self, x, batch_size, pad_mask, max_len):
         res1 = x
         x = self.self_att(x, batch_size, pad_mask, max_len)
-        # x = x.unsqueeze(-1)
 
-        # print("x selfatt IN ENC LAYER FORWARD: ", x, x.size())
-        # return;
-        # norm2 = nn.BatchNorm2d(x.size()[1])
-        # y = norm2(x)
-        # print("y norm2 in ENC LAYER FORWARD: ", y)
         x = self.norm(x)
-
-        # print("x norm in ENC LAYER FORWARD: ", z)
-
-
 
         x = self.dropout(x)
-        # print("x dropout in ENC LAYER FORWARD: ", x)
 
-        # res2 = x
         res2 = res1 + x
-        # print("x after res2: ", x.size())
         x = self.feed_fwd(x)
-        # print("x feedfwd: ", x)
         x = self.norm(x)
 
-        # print("norm 2 x: ", x, x.size())
 
         x = self.dropout(x)
         x += res2 
-
-        # print("final x: ", x, x.size())
         return x
 
 def make_sub_mask(seq):
-    # print("seq: ", seq, type(seq))
     sz_b, len_s = seq.size()[0], seq.size()[1]
-    # subsequent_mask = torch.tril(torch.ones((len_s, len_s), device = seq.device, dtype = torch.uint8), diagonal=0)
     subsequent_mask = torch.tril(torch.ones((len_s, 1), device = seq.device, dtype = torch.uint8), diagonal=0)
-    # print("sub mask in make mask: ", subsequent_mask)
-    # print("sub mask size in make mask: ", subsequent_mask.size())
     subsequent_mask = subsequent_mask.unsqueeze(0).expand(sz_b, -1, -1) 
     return subsequent_mask
 
@@ -163,27 +133,12 @@ class DecLayer(nn.Module):
     def forward(self, x, pad_mask, batch_size, max_len):
         res1 = x
         sub_mask = make_sub_mask(x)
-        # print('sub_mask dec', sub_mask, sub_mask.shape) # (10, 203, 203)
-        # print('pad_mask dec', pad_mask, pad_mask.shape) # (10, 203, 203)
-
-        # print("sub_mask before bit operation: ", sub_mask.size())
         sub_mask = 1 - sub_mask
         mask = sub_mask | pad_mask # (10, 203, 203)
-        # print('mask dec', mask, mask.shape) 
-        
-        # combination of pad_mask and sub_mask
-        # print("mask dim: ", mask.size())
-
-        #mask = pad_mask & sub_mask 
-        # print("batch_size: ", batch_size)
-        # print("pad mask: ", pad_mask)
-        # x = self.masked_self_att(x, batch_size, pad_mask, max_len, mask)
         x = self.masked_self_att(x, batch_size, pad_mask, max_len) # using this line removes NAN! 
         x = self.norm(x)
         x = self.dropout(x)
         res2 = res1 + x
-        # print('res2 ', res2)
-        # print('padmask ', pad_mask)
         x = res2
         x = self.self_att(x, batch_size, pad_mask, max_len)
         x = self.norm(x)
@@ -204,52 +159,20 @@ class MultiHeadSelfAttention(nn.Module):
         self.self_attn_list = nn.ModuleList([copy.deepcopy(self.self_attn) for _ in range(num_headz)])
         self.dropout = dropout
         self.W_O = nn.Linear(num_headz * hidden_size, hidden_size)
+        nn.init.xavier_normal_(self.W_O.weight)
 
 
     def forward(self, x, batch_size, pad_mask, max_len, sub_mask = None):
-        # if sub_mask is not None:
-        #     sub_mask = sub_mask.unsqueeze(1)
-        device = torch.device("cpu")
-        # if sub_mask is not None: 
-            # print("submask: ", sub_mask.size())
-
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         att_heads = torch.tensor([[[]] * max_len] * batch_size, device=device)
 
-        # print("att_heads size: ", att_heads.size())
         for i, self_att in enumerate(self.self_attn_list):
-            # print('attn ', i)
             att_head = self_att(x, pad_mask, sub_mask)
-            # print("att_head (SINGULAR) size: ", att_head)
-            # print("att head in mhm forward: ", att_head, att_head.size())
             att_heads = torch.cat((att_heads, att_head), 2)
 
-        # print("att headSSSSS in mhm forward: ", att_heads, att_heads.size())
-        # return; 
-        # print("att_heads dim: ", att_heads.size())
         att = self.W_O(att_heads)
-        # print("att in mhm forward: ", att, att.size())
-        # print("pad_mask size: ", pad_mask.size())
-        # print("att final dim: ", att.size())
 
-        # if sub_mask is not None: 
-        #     # sub_mask = sub_mask.unsqueeze(2)
-        #     # att = att.data.masked_fill(sub_mask, -np.inf)
-        #     # att = att.data.masked_fill_(sub_mask.byte(), -float('inf'))
-        #     att = att.data.masked_fill_(sub_mask.byte(), -1e9)
-
-        #     # print('sub_mask in dot: ', sub_mask, sub_mask.size())
-        #     # print("x in dot: ", x, x.size())
-        #     # return; 
-        # else: 
-        #     # att = att.data.masked_fill(pad_mask, -np.inf)
-        #     # att = att.data.masked_fill_(pad_mask.byte(), -float('inf'))
-        #     att = att.data.masked_fill_(pad_mask.byte(), -1e9)
-
-        #     # print("att in mhm forward!!!!!!: ", att, att.size())
-        # print("att in mhm forward final: ", att, att.size())
-        # return; 
-        return att; 
-        # return att_heads # batch_size, max_seq_len, n_headz * d_k
+        return att # batch_size, max_seq_len, n_headz * d_k
 
 class SelfAttention(nn.Module):
     def __init__(self, dropout, hidden_size, d_k):
@@ -257,6 +180,10 @@ class SelfAttention(nn.Module):
         self.W_v = nn.Linear(hidden_size, d_k) # check on the second dimension of this - potentially d_k? hidden size? unclear
         self.W_k = nn.Linear(hidden_size, d_k)
         self.W_q = nn.Linear(hidden_size, d_k)
+        nn.init.xavier_normal_(self.W_v.weight)
+        nn.init.xavier_normal_(self.W_k.weight)
+        nn.init.xavier_normal_(self.W_q.weight)
+
 
         self.hidden_size = hidden_size
         self.scaled_dot_prod = ScaledDotProductAttention(d_k)
@@ -265,12 +192,8 @@ class SelfAttention(nn.Module):
         K_x = self.W_k(x) # batch_size * max_seq_len * d_k
         V_x = self.W_v(x) # batch_size * max_seq_len * d_k
         Q_x = self.W_q(x) # batch_size * max_seq_len * d_k
-        # if sub_mask is not None: 
-            # print("sub_mask: in selfatten forward", sub_mask.size())
 
         att = self.scaled_dot_prod(K_x, V_x, Q_x, pad_mask, sub_mask)
-        # print("att 1 size: ", att.size())
-        # print("att self: ", att)
         return att # batch_size * max_seq_len, d_k
 
 
@@ -283,7 +206,6 @@ class ScaledDotProductAttention(nn.Module):
 
     def forward(self, k, v, q, pad_mask, sub_mask = None):
         x = torch.bmm(q, torch.transpose(k, 1, 2)) # (batch_size, max_seq_len, max_seq_len)
-        # do mask thing???? 
 
         if sub_mask is not None: 
             x = x.data.masked_fill_(sub_mask.byte(), -1e9)
@@ -291,7 +213,7 @@ class ScaledDotProductAttention(nn.Module):
             x = x.data.masked_fill_(pad_mask.byte(), -1e9)
 
         x /= math.sqrt(self.d_k) # same dim as above
-        x = F.softmax(x) # same dim as above
+        x = F.softmax(x, dim = 1) # same dim as above
 
         att = torch.bmm(x, v) # batch_size, max_seq_len , d_k
 
@@ -305,6 +227,10 @@ class FeedForward(nn.Module):
         self.W1 = nn.Linear(hidden_size, ff_size)
         self.W2 = nn.Linear(ff_size, ff_size2)
         self.W3 = nn.Linear(ff_size2, hidden_size)
+        nn.init.xavier_normal_(self.W1.weight)
+        nn.init.xavier_normal_(self.W2.weight)
+        nn.init.xavier_normal_(self.W3.weight)
+
         self.dropout = dropout
 
 
@@ -319,9 +245,6 @@ class PositionalEncoder(nn.Module):
     def __init__(self, hidden_size, dropout, max_len=400):
         super(PositionalEncoder, self).__init__()
         
-
-        #REPLACE d_model with 
-        # pe = torch.zeros(max_len, e_size)
         pe = torch.zeros(max_len, hidden_size)
         position = torch.arange(0., max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0., hidden_size, 2) * -(math.log(10000.0) / hidden_size))
@@ -332,13 +255,6 @@ class PositionalEncoder(nn.Module):
         self.dropout = dropout
 
     def forward(self, x):
-        # x size: (batch_size, 292 (max_seq_len), hidden_size)
-        # print("x in positional encoder: ", x.size())
-        # print("pe thing: ", self.pe[:, :x.size(1)].size())
-        # z = Variable(self.pe[:, :x.size(1)], requires_grad=False)
-        # print("z: ", z.size())
-        # y = x + Variable(self.pe[:, :x.size(1)], requires_grad=False)
-        # print("y: ", y)
         return self.dropout(x + Variable(self.pe[:, :x.size(1)], requires_grad=False))
 
 class TransformerOutput(nn.Module):
@@ -346,19 +262,18 @@ class TransformerOutput(nn.Module):
         super(TransformerOutput, self).__init__()
         self.W1 = nn.Linear(hidden_size, 1)
         self.W2 = nn.Linear(hidden_size, 1)
+        nn.init.xavier_normal_(self.W1.weight)
+        nn.init.xavier_normal_(self.W2.weight)
+
 
     def forward(self, m_0, m_1, m_2):
         m_01 = torch.cat((m_0, m_1), 1)
         m_02 = torch.cat((m_0, m_2), 1)
-        # print('m_01: ', m_01)
 
         p1 = F.log_softmax(self.W1(m_01), 1)
-        # p1 = masked_softmax(self.W1(m_01), 1)
-        print('p1: ', p1)
         p2 = F.log_softmax(self.W1(m_02), 1)
         p1 = p1.squeeze(2)
         p2 = p2.squeeze(2)
-        print('p1: ', p1)
 
         return p1, p2
 
@@ -381,15 +296,13 @@ class Embedding(nn.Module):
 
         # added 4 here bc we added 4 features (dep, dep head, pos, ner)
         self.proj = nn.Linear(2 * word_vectors.size(1) + 4, hidden_size, bias=False)
+        nn.init.xavier_normal_(self.proj.weight)
+
         self.hwy = HighwayEncoder(2, hidden_size)
-        # print("hidden_size: ", hidden_size)
         self.e_char = 64
         self.e_word = 300
         self.m_word = 16
         self.cnn = CNN(self.e_char, self.e_word, self.m_word)
-
-        # with open ('wordidx2posidx.json') as json_file: 
-        #     self.wordidx2posidx = json.load(json_file)
 
         with open('idx2word.json') as json_file:
             self.idx2word = json.load(json_file)
@@ -407,18 +320,9 @@ class Embedding(nn.Module):
             self.pos2idx = json.load(json_file)
             self.pos2idx[''] = -1
 
-        # with open('ent2idx.json') as json_file:
-        #     self.ent2idx = json.load(json_file)
-        #     self.ent2idx[''] = -1
-
-        # print(self.dep2idx)
-
 
 
     def forward(self, x_w, x_c):
-        # batch_size = 64, seq_len = ?
-        # print("x_w size: ", x_w.size()) # (batch_size, max_sen_len)
-        # print("x_c size: ", x_c.size()) # (batch_size, max_sen_len, max_word_len)
 
 
         emb_w = self.embed_w(x_w)  # (batch_size, seq_len, embed_size)
@@ -429,20 +333,12 @@ class Embedding(nn.Module):
         x_conv_out_c = self.cnn(x_reshaped_new) 
 
         emb_w = emb_w.view(-1, self.e_word)
-
-        # pos_list = [[float(self.wordidx2posidx[str(int(word))]) for word in sentence] for sentence in x_w]
-
-        # NULL_IDX = self.word2idx["--NULL--"]
-        # OOV_IDX = self.word2idx["--OOV--"]
-
-        # sentences = [[self.idx2word[str(int(word_int))] for word_int in sentence_int if int(word_int) != NULL_IDX and int(word_int) != OOV_IDX] for sentence_int in x_w]
         
         sentences_split = [[self.idx2word[str(int(word_int))] for word_int in sentence_int] for sentence_int in x_w]
 
         space = " "
         sentences = [space.join(sentences_split[i]) for i in range(len(sentences_split))]
 
-        # sentences = (batch_size, sentence_length)
         nlp = spacy.load('en')
 
         nlp_sentences = [nlp(space.join(sentences_split[i])) for i in range(len(sentences_split))]
@@ -459,11 +355,7 @@ class Embedding(nn.Module):
         tag_list = [[[float(self.dep2idx[token.dep_]) if token.dep_ in self.dep2idx else -1, float(self.word2idx[token.head.text]) if token.head.text in self.word2idx else -1, float(self.pos2idx[token.pos_]) if token.pos_ in self.pos2idx else -1, float(1) if str(token) in [str(e) for e in sentence.ents] else float(0)] for token in sentence] for sentence in nlp_sentences] 
         tags = torch.tensor(tag_list)
 
-        # ent_list = [[1 if str(token) in [str(e) for e in sentence.ents] else 0 for token in sentence] for sentence in nlp_sentences]
 
-        # pos = torch.tensor(pos_list)
-        # pos = pos.view(pos.shape[0], pos.shape[1], -1)
-        # pos = pos.view(-1, pos.shape[2])
         tags = tags.view(-1, tags.shape[2])        
         concatenated = torch.cat((x_conv_out_c, emb_w, tags), 1)
 
@@ -471,7 +363,6 @@ class Embedding(nn.Module):
         emb = self.proj(concatenated)
         emb = self.hwy(emb)
 
-        print("embedding size: ", emb.size())
 
         return emb
 
@@ -539,9 +430,6 @@ class RNNEncoder(nn.Module):
         x = pack_padded_sequence(x, lengths, batch_first=True)
 
         # Apply RNN
-        # print("passing into rnn: ", x)
-        # print("type: ", type(x))
-        # print("passing into rnn size: ", x.shape)
         x, _ = self.rnn(x)  # (batch_size, seq_len, 2 * hidden_size)
 
         # Unpack and reverse sort
@@ -582,8 +470,6 @@ class BiDAFAttention(nn.Module):
         self.bias = nn.Parameter(torch.zeros(1))
 
     def forward(self, c, q, c_mask, q_mask):
-        # print("c size: ", c.size())
-        # print("q size: ", q.size())
         batch_size, c_len, _ = c.size()
         q_len = q.size(1)
         s = self.get_similarity_matrix(c, q)        # (batch_size, c_len, q_len)
