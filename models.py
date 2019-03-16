@@ -44,13 +44,13 @@ class Transformer(nn.Module):
 
         self.transformer = layers.Transformer(hidden_size)
 
-        # self.att = layers.BiDAFAttention(hidden_size= hidden_size,
-                                         # drop_prob=drop_prob)
+        self.att = layers.BiDAFAttention(hidden_size= hidden_size,
+                                         drop_prob=drop_prob)
 
-        self.mod = layers.RNNEncoder(input_size=4 * hidden_size,
-                                     hidden_size=hidden_size,
-                                     num_layers=2,
-                                     drop_prob=drop_prob)
+        # self.mod = layers.RNNEncoder(input_size=4 * hidden_size,
+        #                              hidden_size=hidden_size,
+        #                              num_layers=2,
+        #                              drop_prob=drop_prob)
 
         # self.out = layers. BiDAFOutput(hidden_size=hidden_size,
                                       # drop_prob=drop_prob)
@@ -103,8 +103,8 @@ class Transformer(nn.Module):
         c_mask = c_mask.unsqueeze(2)
         q_mask = q_mask.unsqueeze(2)
         # print("c_mask size 1: ", c_mask.size())
-        c_mask = 1 - c_mask
-        q_mask = 1 - q_mask
+        c_mask_inv = 1 - c_mask
+        q_mask_inv = 1 - q_mask
 
         # print("c_mask size 2: ", c_mask.size())
         # print("c_mask: ", c_mask) 
@@ -112,22 +112,26 @@ class Transformer(nn.Module):
 
         # print(type(c_emb), type(c_mask), type(batch_size_c), type(c_max_len))
 
-        c_0, c_1, c_2 = self.transformer(c_emb, c_mask, batch_size_c, c_max_len)
-        q_0, q_1, q_2 = self.transformer(q_emb, q_mask, batch_size_q, q_max_len)
+        c_0, c_1 = self.transformer(c_emb, c_mask_inv, batch_size_c, c_max_len)
+        q_0, q_1 = self.transformer(q_emb, q_mask_inv, batch_size_q, q_max_len)
         # print("c_out size: ", c_out.size())
         # print("q_out size: ", q_out.size())
         # print("c_enc: ", c_enc.size())
         # print("q_enc: ", q_enc.size())
         #print("c0, c1, c2: ", c_0.shape, c_1.shape, c_2.shape)
 
-        m_0 = torch.cat((c_0, q_0), 1)
-        m_1 = torch.cat((c_1, q_1), 1)
-        m_2 = torch.cat((c_2, q_2), 1)
-        mask = (1-torch.cat((c_mask, q_mask), 1)).repeat(1, 2, 1)
+        m_0 = self.att(c_0, q_0, c_mask, q_mask)
+        m_1 = self.att(c_1, q_1, c_mask, q_mask)
+        # m_0 = torch.cat((q_0, c_0), 1)
+        # m_1 = torch.cat((q_1, c_1), 1) #bs, clen, hiddensz
+        # m_2 = torch.cat((c_2, q_2), 1)
+        # mask = (1-torch.cat((c_mask, q_mask), 1)).repeat(1, 2, 1)
+
+
         # print('mask', mask.shape)
         # print("m0, m1, m2: ", m_0.shape, m_1.shape, m_2.shape)
 
-        out = self.out(m_0, m_1, m_2, mask.squeeze())
+        out = self.out(m_0, m_1, c_mask.squeeze())
 
         # print('out: ', out[0].shape)
 

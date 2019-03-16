@@ -51,11 +51,11 @@ class Transformer(nn.Module):
 
         m_1 = x
 
-        # x = self.pos_enc(x)
-        x = self.encoder(x, batch_size, pad_mask, max_len)
-        x = self.decoder(x, batch_size, pad_mask, max_len)
+        # # x = self.pos_enc(x)
+        # x = self.encoder(x, batch_size, pad_mask, max_len)
+        # x = self.decoder(x, batch_size, pad_mask, max_len)
 
-        m_2 = x
+        # m_2 = x
 
         # end = time.clock() 
         # print("transformer forward pass: ", end-start)
@@ -63,7 +63,7 @@ class Transformer(nn.Module):
         # print("encoder forward pass: ", end_enc-end_pos)
         # print("decoder forward pass: ", end_dec-end_enc)
 
-        return m_0, m_1, m_2
+        return m_0, m_1
 
 
 
@@ -294,18 +294,22 @@ class PositionalEncoder(nn.Module):
 class TransformerOutput(nn.Module):
     def __init__(self, hidden_size):
         super(TransformerOutput, self).__init__()
-        self.W1 = nn.Linear(hidden_size, 1)
-        self.W2 = nn.Linear(hidden_size, 1)
+        self.W1 = nn.Linear(4*hidden_size, 1)
+        self.W2 = nn.Linear(4*hidden_size, 1)
         nn.init.xavier_normal_(self.W1.weight)
         nn.init.xavier_normal_(self.W2.weight)
 
 
-    def forward(self, m_0, m_1, m_2, mask):
-        m_01 = torch.cat((m_0, m_1), 1)
-        m_02 = torch.cat((m_0, m_2), 1)
+    def forward(self, m_0, m_1, mask):
+        m_0 = self.W1(m_0)
+        m_1 = self.W2(m_1)
+        # print('m_0 ', m_0.shape)
+        # print('mask ', mask.shape)
 
-        p1 = masked_softmax(self.W1(m_01).squeeze(), mask, dim=1, log_softmax=True)
-        p2 = masked_softmax(self.W1(m_02).squeeze(), mask, dim=1, log_softmax=True)
+
+        p1 = masked_softmax(m_0.squeeze(), mask, dim=1, log_softmax=True)
+        p2 = masked_softmax(m_1.squeeze(), mask, dim=1, log_softmax=True)
+
         # p1 = p1.squeeze(2)
         # p2 = p2.squeeze(2)
 
@@ -481,6 +485,8 @@ class RNNEncoder(nn.Module):
 
         # print("x size (in LSTM forward): ", x.size())
         return x
+
+
 
 
 class BiDAFAttention(nn.Module):
