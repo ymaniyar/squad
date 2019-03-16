@@ -372,6 +372,7 @@ class Embedding(nn.Module):
         
         sentences_split = [[self.idx2word[str(int(word_int))] for word_int in sentence_int] for sentence_int in x_w]
 
+        spacy.prefer_gpu()
         space = " "
         sentences = [space.join(sentences_split[i]) for i in range(len(sentences_split))]
 
