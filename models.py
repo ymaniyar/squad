@@ -123,9 +123,11 @@ class Transformer(nn.Module):
         m_0 = torch.cat((c_0, q_0), 1)
         m_1 = torch.cat((c_1, q_1), 1)
         m_2 = torch.cat((c_2, q_2), 1)
-        #print("c0, c1, c2: ", m_0.shape, m_1.shape, m_2.shape)
+        mask = (1-torch.cat((c_mask, q_mask), 1)).repeat(1, 2, 1)
+        # print('mask', mask.shape)
+        # print("m0, m1, m2: ", m_0.shape, m_1.shape, m_2.shape)
 
-        out = self.out(m_0, m_1, m_2)
+        out = self.out(m_0, m_1, m_2, mask.squeeze())
 
         # print('out: ', out[0].shape)
 

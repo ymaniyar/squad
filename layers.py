@@ -300,14 +300,14 @@ class TransformerOutput(nn.Module):
         nn.init.xavier_normal_(self.W2.weight)
 
 
-    def forward(self, m_0, m_1, m_2):
+    def forward(self, m_0, m_1, m_2, mask):
         m_01 = torch.cat((m_0, m_1), 1)
         m_02 = torch.cat((m_0, m_2), 1)
 
-        p1 = F.log_softmax(self.W1(m_01), 1)
-        p2 = F.log_softmax(self.W1(m_02), 1)
-        p1 = p1.squeeze(2)
-        p2 = p2.squeeze(2)
+        p1 = masked_softmax(self.W1(m_01).squeeze(), mask, dim=1, log_softmax=True)
+        p2 = masked_softmax(self.W1(m_02).squeeze(), mask, dim=1, log_softmax=True)
+        # p1 = p1.squeeze(2)
+        # p2 = p2.squeeze(2)
 
         return p1, p2
 
