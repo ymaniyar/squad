@@ -16,7 +16,7 @@ import util
 from args import get_train_args
 from collections import OrderedDict
 from json import dumps
-from models import Transformer
+from models import BiDAF
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
@@ -54,7 +54,7 @@ def main(args):
     # model = BiDAF(word_vectors=word_vectors,
     #               hidden_size=args.hidden_size,
     #               drop_prob=args.drop_prob)
-    model = Transformer(word_vectors=word_vectors,
+    model = BiDAF(word_vectors=word_vectors,
                   char_vectors = char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob)
@@ -228,7 +228,7 @@ def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
                                            use_squad_v2)
             # print('comapare ', starts.tolist(), y1)
             # print('comapare ', ends.tolist(), y2)
-            
+
             pred_dict.update(preds)
 
     model.train()
