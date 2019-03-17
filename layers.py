@@ -27,41 +27,27 @@ class Transformer(nn.Module):
         super(Transformer, self).__init__()
 
         self.dropout = nn.Dropout(p = dropout_prob)
-        self.enc_layer = EncLayer(self.dropout, hidden_size)
-        self.dec_layer = DecLayer(self.dropout, hidden_size)
-        self.encoder = TransformerEncoder(self.enc_layer, num_layers)
-        self.decoder = TransformerDecoder(self.dec_layer, num_layers)
+        self.enc_layer1 = EncLayer(self.dropout, hidden_size)
+        self.enc_layer2 = EncLayer(self.dropout, hidden_size)
+        self.dec_layer1 = DecLayer(self.dropout, hidden_size)
+        self.dec_layer2 = DecLayer(self.dropout, hidden_size)
+        self.dec_layer3 = DecLayer(self.dropout, hidden_size)
+        self.encoder = TransformerEncoder([self.enc_layer1, self.enc_layer2], num_layers)
+        self.decoder = TransformerDecoder([self.dec_layer1, self.dec_layer2, self.dec_layer3], num_layers)
         self.pos_enc = PositionalEncoder(hidden_size, self.dropout)
         # embedding: batch * seq_len * embed_size (word + chars + 4)
 
     def forward(self, x, pad_mask, batch_size, max_len):
-        # start = time.clock() 
         x = self.pos_enc(x)
-        # end_pos = time.clock() 
         x = self.encoder(x, batch_size, pad_mask, max_len)
-        # end_enc = time.clock() 
         x = self.decoder(x, batch_size, pad_mask, max_len)
-        # end_dec = time.clock()
 
         m_0 = x
 
-        # x = self.pos_enc(x)
         x = self.encoder(x, batch_size, pad_mask, max_len)
         x = self.decoder(x, batch_size, pad_mask, max_len)
 
         m_1 = x
-
-        # # x = self.pos_enc(x)
-        # x = self.encoder(x, batch_size, pad_mask, max_len)
-        # x = self.decoder(x, batch_size, pad_mask, max_len)
-
-        # m_2 = x
-
-        # end = time.clock() 
-        # print("transformer forward pass: ", end-start)
-        # print("pos enc forward pass: ", end_pos-start)
-        # print("encoder forward pass: ", end_enc-end_pos)
-        # print("decoder forward pass: ", end_dec-end_enc)
 
         return m_0, m_1
 
@@ -69,11 +55,11 @@ class Transformer(nn.Module):
 
 class TransformerEncoder(nn.Module):
 
-    def __init__(self, layer, N):
+    def __init__(self, layer_list, N):
         super(TransformerEncoder, self).__init__()
         
-        self.layers = nn.ModuleList([copy.deepcopy(layer) for _ in range(N)])
-        self.norm = nn.LayerNorm(layer.size, eps=1e-06)
+        self.layers = nn.ModuleList(layer_list)
+        self.norm = nn.LayerNorm(layer_list[0].size, eps=1e-06)
 
     def forward(self, x, batch_size, pad_mask, max_len):
         for i, layer in enumerate(self.layers): 
@@ -85,11 +71,11 @@ class TransformerEncoder(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, layer, N):
+    def __init__(self, layer_list, N):
         super(TransformerDecoder, self).__init__()
 
-        self.layers = nn.ModuleList([copy.deepcopy(layer) for _ in range(N)])
-        self.norm = nn.LayerNorm(layer.size, eps=1e-06)
+        self.layers = nn.ModuleList(layer_list)
+        self.norm = nn.LayerNorm(layer_list[0].size, eps=1e-06)
 
     def forward(self, x, batch_size, pad_mask, max_len):
         for i, layer in enumerate(self.layers):
@@ -97,7 +83,7 @@ class TransformerDecoder(nn.Module):
         return self.norm(x)
 
 class EncLayer(nn.Module):
-    def __init__(self, dropout, hidden_size, num_headz = 6):
+    def __init__(self, dropout, hidden_size, num_headz = 3):
         super(EncLayer, self).__init__()
 
         self.self_att = MultiHeadSelfAttention(dropout, hidden_size)
@@ -131,7 +117,7 @@ def make_sub_mask(seq):
     return subsequent_mask
 
 class DecLayer(nn.Module):
-    def __init__(self, dropout, hidden_size, num_headz = 6):
+    def __init__(self, dropout, hidden_size, num_headz = 3):
         super(DecLayer, self).__init__()
 
         self.masked_self_att = MultiHeadSelfAttention(dropout, hidden_size)
@@ -163,7 +149,7 @@ class DecLayer(nn.Module):
         return x
 
 class MultiHeadSelfAttention(nn.Module):
-    def __init__(self, dropout, hidden_size, num_headz=6):
+    def __init__(self, dropout, hidden_size, num_headz=3):
         super(MultiHeadSelfAttention, self).__init__()
 
         # self.self_attn = SelfAttention(dropout, hidden_size, hidden_size)
@@ -177,6 +163,9 @@ class MultiHeadSelfAttention(nn.Module):
         self.n_heads = num_headz
         self.hidden_size = hidden_size
         nn.init.xavier_normal_(self.W_o.weight)
+        nn.init.xavier_normal_(self.W_q.weight)
+        nn.init.xavier_normal_(self.W_k.weight)
+        nn.init.xavier_normal_(self.W_v.weight)
 
 
     def forward(self, x, batch_size, pad_mask, max_len, sub_mask = None):
@@ -307,8 +296,8 @@ class TransformerOutput(nn.Module):
         # print('mask ', mask.shape)
 
 
-        p1 = masked_softmax(m_0.squeeze(), mask, dim=1, log_softmax=True)
-        p2 = masked_softmax(m_1.squeeze(), mask, dim=1, log_softmax=True)
+        p1 = masked_softmax(m_0.squeeze(dim=2), mask, dim=1, log_softmax=True)
+        p2 = masked_softmax(m_1.squeeze(dim=2), mask, dim=1, log_softmax=True)
 
         # p1 = p1.squeeze(2)
         # p2 = p2.squeeze(2)

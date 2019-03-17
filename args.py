@@ -95,11 +95,11 @@ def get_train_args():
 
     parser.add_argument('--eval_steps',
                         type=int,
-                        default=10,
+                        default=100,
                         help='Number of steps between successive evaluations.')
     parser.add_argument('--lr',
                         type=float,
-                        default=0.15,
+                        default=0.001,
                         help='Learning rate.')
     parser.add_argument('--l2_wd',
                         type=float,

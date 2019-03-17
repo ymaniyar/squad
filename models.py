@@ -131,7 +131,7 @@ class Transformer(nn.Module):
         # print('mask', mask.shape)
         # print("m0, m1, m2: ", m_0.shape, m_1.shape, m_2.shape)
 
-        out = self.out(m_0, m_1, c_mask.squeeze())
+        out = self.out(m_0, m_1, c_mask.squeeze(dim=2))
 
 
 
