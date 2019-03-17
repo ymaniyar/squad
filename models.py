@@ -28,7 +28,6 @@ class Transformer(nn.Module):
     def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0.):
         super(Transformer, self).__init__()
 
-        # print("vectors: ", word_vectors)
         self.emb = layers.Embedding(word_vectors=word_vectors,
                                     char_vectors = char_vectors,
                                     hidden_size=hidden_size,
