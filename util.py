@@ -608,6 +608,8 @@ def convert_tokens(eval_dict, qa_id, y_start_list, y_end_list, no_answer):
             end_idx = spans[y_end][1]
             pred_dict[str(qid)] = context[start_idx: end_idx]
             sub_dict[uuid] = context[start_idx: end_idx]
+        # print('truth ', eval_dict[str(qid)]['answers'])
+        # print('pred ', pred_dict[str(qid)])
     return pred_dict, sub_dict
 
 

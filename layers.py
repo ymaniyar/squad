@@ -312,7 +312,6 @@ class TransformerOutput(nn.Module):
 
         # p1 = p1.squeeze(2)
         # p2 = p2.squeeze(2)
-
         return p1, p2
 
 class Embedding(nn.Module):
@@ -375,7 +374,7 @@ class Embedding(nn.Module):
         emb_w = emb_w.view(-1, self.e_word)
         
         sentences_split = [[self.idx2word[str(int(word_int))] for word_int in sentence_int] for sentence_int in x_w]
-
+        # print('sentences_split ', x_w.shape)
         spacy.prefer_gpu()
         space = " "
         sentences = [space.join(sentences_split[i]) for i in range(len(sentences_split))]
@@ -394,7 +393,9 @@ class Embedding(nn.Module):
 
 
         tag_list = [[[float(self.dep2idx[token.dep_]) if token.dep_ in self.dep2idx else -1, float(self.word2idx[token.head.text]) if token.head.text in self.word2idx else -1, float(self.pos2idx[token.pos_]) if token.pos_ in self.pos2idx else -1, float(1) if str(token) in [str(e) for e in sentence.ents] else float(0)] for token in sentence] for sentence in nlp_sentences] 
+
         tags = torch.tensor(tag_list, device=device)
+        # print('tag list ', tags.shape)
 
 
         tags = tags.view(-1, tags.shape[2])        

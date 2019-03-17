@@ -135,8 +135,8 @@ class Transformer(nn.Module):
 
 
 
-        print('out: ', out[0].shape)
-        print('cmax ', c_max_len)
+        # print('out: ', out[0].shape)
+        # print('cmax ', c_max_len)
 
         # print("new output maybe: ", torch.exp(out[0]))
         # print("new output maybe 2: ", torch.exp(out[1]))

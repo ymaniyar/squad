@@ -226,7 +226,6 @@ def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
                                            starts.tolist(),
                                            ends.tolist(),
                                            use_squad_v2)
-
             # print('comapare ', starts.tolist(), y1)
             # print('comapare ', ends.tolist(), y2)
 
