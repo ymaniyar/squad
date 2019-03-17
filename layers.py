@@ -321,7 +321,7 @@ class Embedding(nn.Module):
         self.embed_c = nn.Embedding.from_pretrained(char_vectors, freeze = False)
 
         # added 4 here bc we added 4 features (dep, dep head, pos, ner)
-        self.proj = nn.Linear(2 * word_vectors.size(1) + 4, hidden_size, bias=False)
+        self.proj = nn.Linear(2 * word_vectors.size(1), hidden_size, bias=False)
         nn.init.xavier_normal_(self.proj.weight)
 
         self.hwy = HighwayEncoder(2, hidden_size)
@@ -329,23 +329,23 @@ class Embedding(nn.Module):
         self.e_word = 300
         self.m_word = 16
         self.cnn = CNN(self.e_char, self.e_word, self.m_word)
-        self.nlp = spacy.load('en')
+        # self.nlp = spacy.load('en')
 
-        with open('idx2word.json') as json_file:
-            self.idx2word = json.load(json_file)
-        # print(len(self.idx2word))
+        # with open('idx2word.json') as json_file:
+        #     self.idx2word = json.load(json_file)
+        # # print(len(self.idx2word))
 
-        with open('./data/word2idx.json') as json_file:
-            self.word2idx = json.load(json_file)
-            self.word2idx[''] = -1
+        # with open('./data/word2idx.json') as json_file:
+        #     self.word2idx = json.load(json_file)
+        #     self.word2idx[''] = -1
 
-        with open('dep2idx.json') as json_file:
-            self.dep2idx = json.load(json_file)
-            self.dep2idx[''] = -1
+        # with open('dep2idx.json') as json_file:
+        #     self.dep2idx = json.load(json_file)
+        #     self.dep2idx[''] = -1
 
-        with open('pos2idx.json') as json_file:
-            self.pos2idx = json.load(json_file)
-            self.pos2idx[''] = -1
+        # with open('pos2idx.json') as json_file:
+        #     self.pos2idx = json.load(json_file)
+        #     self.pos2idx[''] = -1
 
 
 
@@ -362,33 +362,33 @@ class Embedding(nn.Module):
 
         emb_w = emb_w.view(-1, self.e_word)
         
-        sentences_split = [[self.idx2word[str(int(word_int))] for word_int in sentence_int] for sentence_int in x_w]
-        # print('sentences_split ', x_w.shape)
-        spacy.prefer_gpu()
-        space = " "
-        sentences = [space.join(sentences_split[i]) for i in range(len(sentences_split))]
+        # sentences_split = [[self.idx2word[str(int(word_int))] for word_int in sentence_int] for sentence_int in x_w]
+        # # print('sentences_split ', x_w.shape)
+        # spacy.prefer_gpu()
+        # space = " "
+        # sentences = [space.join(sentences_split[i]) for i in range(len(sentences_split))]
 
         
 
-        nlp_sentences = [self.nlp(space.join(sentences_split[i])) for i in range(len(sentences_split))]
-        for s, sentence in enumerate(nlp_sentences):
-            sent_split = sentences_split[s]
-            if len(sentence)!= len(sent_split):
-                for i in range(0, len(sent_split)):
-                    if str(sentence[i])!=str(sent_split[i]):
-                        new_sentence = Doc(sentence.vocab, words = [word.text for t, word in enumerate(sentence) if t!=i])
-                        sentence = new_sentence
-                nlp_sentences[s] = sentence
+        # nlp_sentences = [self.nlp(space.join(sentences_split[i])) for i in range(len(sentences_split))]
+        # for s, sentence in enumerate(nlp_sentences):
+        #     sent_split = sentences_split[s]
+        #     if len(sentence)!= len(sent_split):
+        #         for i in range(0, len(sent_split)):
+        #             if str(sentence[i])!=str(sent_split[i]):
+        #                 new_sentence = Doc(sentence.vocab, words = [word.text for t, word in enumerate(sentence) if t!=i])
+        #                 sentence = new_sentence
+        #         nlp_sentences[s] = sentence
 
 
-        tag_list = [[[float(self.dep2idx[token.dep_]) if token.dep_ in self.dep2idx else -1, float(self.word2idx[token.head.text]) if token.head.text in self.word2idx else -1, float(self.pos2idx[token.pos_]) if token.pos_ in self.pos2idx else -1, float(1) if str(token) in [str(e) for e in sentence.ents] else float(0)] for token in sentence] for sentence in nlp_sentences] 
+        # tag_list = [[[float(self.dep2idx[token.dep_]) if token.dep_ in self.dep2idx else -1, float(self.word2idx[token.head.text]) if token.head.text in self.word2idx else -1, float(self.pos2idx[token.pos_]) if token.pos_ in self.pos2idx else -1, float(1) if str(token) in [str(e) for e in sentence.ents] else float(0)] for token in sentence] for sentence in nlp_sentences] 
 
-        tags = torch.tensor(tag_list, device=device)
+        # tags = torch.tensor(tag_list, device=device)
         # print('tag list ', tags.shape)
 
 
-        tags = tags.view(-1, tags.shape[2])        
-        concatenated = torch.cat((x_conv_out_c, emb_w, tags), 1)
+        # tags = tags.view(-1, tags.shape[2])        
+        concatenated = torch.cat((x_conv_out_c, emb_w), 1)
 
         emb = F.dropout(concatenated, self.drop_prob, self.training)
         emb = self.proj(concatenated)

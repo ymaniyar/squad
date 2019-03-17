@@ -95,7 +95,7 @@ def get_train_args():
 
     parser.add_argument('--eval_steps',
                         type=int,
-                        default=100,
+                        default=10000,
                         help='Number of steps between successive evaluations.')
     parser.add_argument('--lr',
                         type=float,
@@ -224,7 +224,7 @@ def add_train_test_args(parser):
                         help='Base directory for saving information.')
     parser.add_argument('--batch_size',
                         type=int,
-                        default=10,
+                        default=64,
                         help='Batch size per GPU. Scales automatically when \
                               multiple GPUs are available.')
     parser.add_argument('--use_squad_v2',
