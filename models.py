@@ -96,3 +96,79 @@ class QANet(nn.Module):
 
         return out
 
+
+class Transformer(nn.Module):
+    """
+    Args:
+        word_vectors (torch.Tensor): Pre-trained word vectors.
+        hidden_size (int): Number of features in the hidden state at each layer.
+        drop_prob (float): Dropout probability.
+    """
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0.):
+        super(Transformer, self).__init__()
+
+        # print("vectors: ", word_vectors)
+        self.emb = layers.Embedding(word_vectors=word_vectors,
+                                    char_vectors = char_vectors,
+                                    hidden_size=hidden_size,
+                                    drop_prob=drop_prob)
+
+        self.enc = layers.RNNEncoder(input_size=hidden_size,
+                                     hidden_size=hidden_size,
+                                     num_layers=1,
+                                     drop_prob=drop_prob)
+
+        self.embed_size = 64 + 300 + 4
+
+
+        self.transformer = layers.Transformer(hidden_size)
+
+        self.att = layers.BiDAFAttention(hidden_size= hidden_size,
+                                         drop_prob=drop_prob)
+
+        self.out = layers.TransformerOutput(hidden_size)
+
+        self.hidden_size = hidden_size
+
+    def make_sub_mask(self, seq):
+        sz_b, len_s = seq.size()[0], seq.size()[1]
+        subsequent_mask = torch.tril(torch.ones((len_s, len_s), device = seq.device, dtype = torch.uint8), diagonal=0)
+        subsequent_mask = subsequent_mask.unsqueeze(0).expand(sz_b, -1, -1) 
+        return subsequent_mask
+
+    def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):
+
+        c_mask = torch.zeros_like(cw_idxs) != cw_idxs
+        q_mask = torch.zeros_like(qw_idxs) != qw_idxs
+        c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
+
+
+        c_emb = self.emb(cw_idxs, cc_idxs)         # (batch_size, c_len, hidden_size)
+        q_emb = self.emb(qw_idxs, qc_idxs)         # (batch_size, q_len, hidden_size)
+        
+        c_max_len = cw_idxs.shape[1]
+        q_max_len = qw_idxs.shape[1]
+
+        c_emb = c_emb.view(-1, c_max_len, self.hidden_size)
+        q_emb = q_emb.view(-1, q_max_len, self.hidden_size)
+
+        batch_size_c = c_emb.size()[0]
+        batch_size_q = q_emb.size()[0]
+
+        c_mask = c_mask.unsqueeze(2)
+        q_mask = q_mask.unsqueeze(2)
+
+        c_mask_inv = 1 - c_mask
+        q_mask_inv = 1 - q_mask
+
+        c_0, c_1 = self.transformer(c_emb, c_mask_inv, batch_size_c, c_max_len)
+        q_0, q_1 = self.transformer(q_emb, q_mask_inv, batch_size_q, q_max_len)
+
+        m_0 = self.att(c_0, q_0, c_mask, q_mask)
+        m_1 = self.att(c_1, q_1, c_mask, q_mask)
+
+        out = self.out(m_0, m_1, c_mask.squeeze(dim=2))
+
+        return out
+
+
