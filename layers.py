@@ -137,8 +137,8 @@ class EncLayer(nn.Module):
         self.norm = nn.LayerNorm(hidden_size, eps=1e-06)
         # self.norm2 = nn.BatchNorm2d(hidden_size, eps = 1e-06)
         # self.conv1 = nn.Conv1d(hidden_size, hidden_size, 5)
-        self.conv1 = Conv1d_same_size(hidden_size, 5)
-        self.conv2 = Conv1d_same_size(hidden_size, 5)
+        self.conv1 = Conv1d_same_size(hidden_size, 7)
+        self.conv2 = Conv1d_same_size(hidden_size, 7)
 
         # self.conv2 = nn.Conv1d(hidden_size, hidden_size, 5)
         self.size = hidden_size
