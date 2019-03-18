@@ -108,6 +108,26 @@ class TransformerDecoder(nn.Module):
             x = layer(x, pad_mask, batch_size, max_len)
         return self.norm(x)
 
+class Conv1d_same_size(nn.Module):
+    def __init__(self, hidden_size, kernel):
+        super(Conv1d_same_size, self).__init__()
+        self.conv = nn.Conv1d(hidden_size, hidden_size, kernel)
+
+    def forward(self, x):
+        # print('x1 ', x.shape)
+        x = x.permute(0, 2, 1)
+        size = x.shape[2]
+        # print('x2 ', x)
+        x = self.conv(x)
+        # print('x3 ', x)
+        pad_sz = size - x.shape[2]
+        pad = nn.ConstantPad1d((0, pad_sz), 0.)
+        x = pad(x)
+        # print('x4 ', x)
+        x = x.permute(0, 2, 1)
+        # print('x5 ', x.shape)
+        return x
+
 class EncLayer(nn.Module):
     def __init__(self, dropout, hidden_size, num_headz = 3):
         super(EncLayer, self).__init__()
@@ -115,20 +135,36 @@ class EncLayer(nn.Module):
         self.feed_fwd = FeedForward(hidden_size, dropout)
         self.dropout = dropout
         self.norm = nn.LayerNorm(hidden_size, eps=1e-06)
-        self.norm2 = nn.BatchNorm2d(hidden_size, eps = 1e-06)
+        # self.norm2 = nn.BatchNorm2d(hidden_size, eps = 1e-06)
+        # self.conv1 = nn.Conv1d(hidden_size, hidden_size, 5)
+        self.conv1 = Conv1d_same_size(hidden_size, 5)
+        self.conv2 = Conv1d_same_size(hidden_size, 5)
+
+        # self.conv2 = nn.Conv1d(hidden_size, hidden_size, 5)
         self.size = hidden_size
 
     def forward(self, x, batch_size, pad_mask, max_len):
         res1 = x
+        # print('x ', x.shape)
         x = self.norm(x)
+        x = self.conv1(x)
+        # print('x1 ', x.shape)
+        res2 = res1 + x
+        x = self.norm(x)
+        x = self.conv2(x)
+        # print('2 ', x.shape)
+        res3 = res2 + x
+        
+        
         x = self.self_att(x, batch_size, pad_mask, max_len)
         x = self.dropout(x)
 
-        res2 = res1 + x
+        res4 = res3 + x
+
         x = self.norm(x)
         x = self.feed_fwd(x)
         x = self.dropout(x)
-        x += res2 
+        x += res4 
         return x
 
 def make_sub_mask(seq):

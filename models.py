@@ -36,13 +36,9 @@ class Transformer(nn.Module):
         self.dropout = nn.Dropout(p = drop_prob)
         self.enc_layer1 = layers.EncLayer(self.dropout, hidden_size)
         self.enc_layer2 = layers.EncLayer(self.dropout, hidden_size)
-        self.enc_layer3 = layers.EncLayer(self.dropout, hidden_size)
-        self.enc_layer4 = layers.EncLayer(self.dropout, hidden_size)
-        enc_list1 = [self.enc_layer1, self.enc_layer2]
-        enc_list2 = [self.enc_layer3, self.enc_layer4]
 
-        self.enc_context = layers.TransformerEncoder(enc_list1)
-        self.enc_query = layers.TransformerEncoder(enc_list2)
+        self.enc_context = layers.TransformerEncoder([self.enc_layer1])
+        self.enc_query = layers.TransformerEncoder([self.enc_layer2])
 
 
         # self.enc = layers.RNNEncoder(input_size=hidden_size,
