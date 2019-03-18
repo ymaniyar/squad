@@ -150,18 +150,18 @@ class EncLayer(nn.Module):
         x = self.conv1(x)
         # print('x1 ', x.shape)
         res2 = res1 + x
-        x = self.norm(x)
+        x = self.norm(res2)
         x = self.conv2(x)
         # print('2 ', x.shape)
         res3 = res2 + x
         
         
-        x = self.self_att(x, batch_size, pad_mask, max_len)
+        x = self.self_att(res3, batch_size, pad_mask, max_len)
         x = self.dropout(x)
 
         res4 = res3 + x
 
-        x = self.norm(x)
+        x = self.norm(res4)
         x = self.feed_fwd(x)
         x = self.dropout(x)
         x += res4 
