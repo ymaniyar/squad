@@ -29,23 +29,37 @@ class Transformer(nn.Module):
         self.dropout = nn.Dropout(p = dropout_prob)
         self.enc_layer1 = EncLayer(self.dropout, hidden_size)
         self.enc_layer2 = EncLayer(self.dropout, hidden_size)
+        self.enc_layer3 = EncLayer(self.dropout, hidden_size)
+        self.enc_layer4 = EncLayer(self.dropout, hidden_size)
+        enc_list1 = [self.enc_layer1, self.enc_layer2]
+        enc_list2 = [self.enc_layer3, self.enc_layer4]
+
         self.dec_layer1 = DecLayer(self.dropout, hidden_size)
         self.dec_layer2 = DecLayer(self.dropout, hidden_size)
         self.dec_layer3 = DecLayer(self.dropout, hidden_size)
-        self.encoder = TransformerEncoder([self.enc_layer1, self.enc_layer2], num_layers)
-        self.decoder = TransformerDecoder([self.dec_layer1, self.dec_layer2, self.dec_layer3], num_layers)
+        self.dec_layer4 = DecLayer(self.dropout, hidden_size)
+        self.dec_layer5 = DecLayer(self.dropout, hidden_size)
+        self.dec_layer6 = DecLayer(self.dropout, hidden_size)
+        dec_list1 = [self.dec_layer1, self.dec_layer2, self.dec_layer3]
+        dec_list2 = [self.dec_layer4, self.dec_layer5, self.dec_layer6]
+
+        self.encoder1 = TransformerEncoder(enc_list1, num_layers)
+        self.encoder2 = TransformerEncoder(enc_list2, num_layers)
+
+        self.decoder1 = TransformerDecoder(dec_list1, num_layers)
+        self.decoder2 = TransformerDecoder(dec_list2, num_layers)
         self.pos_enc = PositionalEncoder(hidden_size, self.dropout)
         # embedding: batch * seq_len * embed_size (word + chars + 4)
 
     def forward(self, x, pad_mask, batch_size, max_len):
         x = self.pos_enc(x)
-        x = self.encoder(x, batch_size, pad_mask, max_len)
-        x = self.decoder(x, batch_size, pad_mask, max_len)
+        x = self.encoder1(x, batch_size, pad_mask, max_len)
+        x = self.decoder1(x, batch_size, pad_mask, max_len)
 
         m_0 = x
 
-        x = self.encoder(x, batch_size, pad_mask, max_len)
-        x = self.decoder(x, batch_size, pad_mask, max_len)
+        x = self.encoder2(x, batch_size, pad_mask, max_len)
+        x = self.decoder2(x, batch_size, pad_mask, max_len)
 
         m_1 = x
 
