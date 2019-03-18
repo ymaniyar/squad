@@ -12,6 +12,7 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as sched
 import torch.utils.data as data
 import util
+import math
 
 from args import get_train_args
 from collections import OrderedDict
@@ -78,8 +79,8 @@ def main(args):
     # Get optimizer and scheduler
     # optimizer = optim.Adadelta(model.parameters(), args.lr,
     #                            weight_decay=args.l2_wd)
-    optimizer = optim.Adam(model.parameters(), args.lr, weight_decay = args.l2_wd)
-    scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
+    optimizer = optim.Adam(model.parameters(), betas=(0.8, 0.999), eps=1e-07, args.lr, weight_decay = args.l2_wd)
+    scheduler = sched.LambdaLR(optimizer, lambda s: math.log(((s*(math.exp(1)-1))/1000)+1))  # Constant LR
 
     # Get data loader
     log.info('Building dataset...')
