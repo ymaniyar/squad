@@ -50,7 +50,6 @@ class BiDAF(nn.Module):
         self.out = layers.BiDAFOutput(hidden_size=hidden_size,
                                       drop_prob=drop_prob)
 
-        # self.batch_size = 64
         self.hidden_size = hidden_size
 
     def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):
@@ -62,13 +61,10 @@ class BiDAF(nn.Module):
         c_emb = self.emb(cw_idxs, cc_idxs)         # (batch_size, c_len, hidden_size)
         q_emb = self.emb(qw_idxs, qc_idxs)         # (batch_size, q_len, hidden_size)
 
-        # print(c_emb.shape)
-        # print(q_emb.shape)
         
         c_max_len = cw_idxs.shape[1]
         q_max_len = qw_idxs.shape[1]
 
-        # print(c_len_, q_len_)
 
         c_emb = c_emb.view(-1, c_max_len, self.hidden_size)
         q_emb = q_emb.view(-1, q_max_len, self.hidden_size)
@@ -76,13 +72,11 @@ class BiDAF(nn.Module):
         c_enc = self.enc(c_emb, c_len)    # (batch_size, c_len, 2 * hidden_size)
         q_enc = self.enc(q_emb, q_len)    # (batch_size, q_len, 2 * hidden_size)
 
-        # print("hre 2")
         att = self.att(c_enc, q_enc,
                        c_mask, q_mask)    # (batch_size, c_len, 8 * hidden_size)
 
         mod = self.mod(att, c_len)        # (batch_size, c_len, 2 * hidden_size)
 
-        # print("here 3")
         out = self.out(att, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
 
         return out
