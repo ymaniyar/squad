@@ -103,7 +103,7 @@ def get_train_args():
                         help='Learning rate.')
     parser.add_argument('--l2_wd',
                         type=float,
-                        default=1e-7,
+                        default=3e-7,
                         help='L2 weight decay.')
     parser.add_argument('--num_epochs',
                         type=int,
@@ -111,7 +111,7 @@ def get_train_args():
                         help='Number of epochs for which to train. Negative means forever.')
     parser.add_argument('--drop_prob',
                         type=float,
-                        default=0.2,
+                        default=0.1,
                         help='Probability of zeroing an activation in dropout layers.')
     parser.add_argument('--metric_name',
                         type=str,
