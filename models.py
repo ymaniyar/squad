@@ -34,14 +34,8 @@ class QANet(nn.Module):
                                     hidden_size=hidden_size,
                                     drop_prob=drop_prob)
         self.dropout = nn.Dropout(p = drop_prob)
-        self.enc_layer1 = layers.EncLayer(self.dropout, hidden_size)
-        self.enc_layer2 = layers.EncLayer(self.dropout, hidden_size)
-
-        self.enc_context = layers.TransformerEncoder([self.enc_layer1])
-        self.enc_query = layers.TransformerEncoder([self.enc_layer2])
-
-        self.embed_size = 64 + 300 + 4
-
+        self.enc_context = layers.Encoder(1, self.dropout, hidden_size, num_conv=4, num_heads=8)
+        self.enc_query = layers.Encoder(1, self.dropout, hidden_size,  num_conv=4, num_heads=8)
 
         self.transformer = layers.Transformer(4*hidden_size)
 

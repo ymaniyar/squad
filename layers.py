@@ -27,51 +27,20 @@ class Transformer(nn.Module):
         super(Transformer, self).__init__()
 
         self.dropout = nn.Dropout(p = dropout_prob)
-        # self.enc_layer1 = EncLayer(self.dropout, hidden_size)
-        # self.enc_layer2 = EncLayer(self.dropout, hidden_size)
-        # self.enc_layer3 = EncLayer(self.dropout, hidden_size)
-        # self.enc_layer4 = EncLayer(self.dropout, hidden_size)
-        # enc_list1 = [self.enc_layer1, self.enc_layer2]
-        # enc_list2 = [self.enc_layer3, self.enc_layer4]
-
-        self.dec_layer1 = DecLayer(self.dropout, hidden_size)
-        self.dec_layer2 = DecLayer(self.dropout, hidden_size)
-        self.dec_layer3 = DecLayer(self.dropout, hidden_size)
-        self.dec_layer4 = DecLayer(self.dropout, hidden_size)
-        self.dec_layer5 = DecLayer(self.dropout, hidden_size)
-        self.dec_layer6 = DecLayer(self.dropout, hidden_size)
-        dec_list1 = [self.dec_layer1, self.dec_layer2]
-        dec_list2 = [self.dec_layer3, self.dec_layer4]
-        dec_list3 = [self.dec_layer5, self.dec_layer6]
-
-        # self.encoder1 = TransformerEncoder(enc_list1)
-        # self.encoder2 = TransformerEncoder(enc_list2)
-
-
-        self.decoder1 = TransformerDecoder(dec_list1)
-        self.decoder2 = TransformerDecoder(dec_list2)
-        self.decoder3 = TransformerDecoder(dec_list2)
-        self.pos_enc1 = PositionalEncoder(hidden_size, self.dropout)
-        self.pos_enc2 = PositionalEncoder(hidden_size, self.dropout)
-        self.pos_enc3 = PositionalEncoder(hidden_size, self.dropout)
+        self.encoder = Encoder(num_layers=7, dropout=self.dropout, hidden_size=hidden_size, num_conv=2, num_heads=8)
 
         # embedding: batch * seq_len * embed_size (word + chars + 4)
 
     def forward(self, x, pad_mask, batch_size, max_len):
-        x = self.pos_enc1(x)
-        # x = self.encoder1(x, batch_size, pad_mask, max_len)
-        x = self.decoder1(x, batch_size, pad_mask, max_len)
+        x = self.encoder(x, batch_size, pad_mask, max_len)
 
         m_0 = x
-
-        # x = self.encoder2(x, batch_size, pad_mask, max_len)
-        x = self.pos_enc2(x)
-        x = self.decoder2(x, batch_size, pad_mask, max_len)
+        
+        x = self.encoder(x, batch_size, pad_mask, max_len)
 
         m_1 = x
 
-        x = self.pos_enc3(x)
-        x = self.decoder3(x, batch_size, pad_mask, max_len)
+        x = self.encoder(x, batch_size, pad_mask, max_len)
 
         m_2 = x
 
@@ -79,21 +48,145 @@ class Transformer(nn.Module):
 
 
 
-class TransformerEncoder(nn.Module):
+class Encoder(nn.Module):
 
-    def __init__(self, layer_list):
-        super(TransformerEncoder, self).__init__()
-        
-        self.layers = nn.ModuleList(layer_list)
-        self.norm = nn.LayerNorm(layer_list[0].size, eps=1e-06)
+    def __init__(self, num_layers, dropout, hidden_size, num_conv, num_heads = 8):
+        super(Encoder, self).__init__()
+        self.layers = nn.ModuleList([EncLayer(dropout, hidden_size, num_heads, num_conv)])
+        self.norm = nn.LayerNorm(hidden_size, eps=1e-06)
 
     def forward(self, x, batch_size, pad_mask, max_len):
         for i, layer in enumerate(self.layers): 
             x = layer(x, batch_size, pad_mask, max_len)
-        x =  self.norm(x)
         return x
 
 
+class Conv1d_same_size(nn.Module):
+    def __init__(self, hidden_size, kernel, norm):
+        super(Conv1d_same_size, self).__init__()
+        self.conv = nn.Conv1d(hidden_size, hidden_size, kernel)
+        self.norm = norm
+
+    def forward(self, x):
+        res = x
+        x = self.norm(x)
+        x = x.permute(0, 2, 1)
+        size = x.shape[2]
+        x = self.conv(x)
+        pad_sz = size - x.shape[2]
+        pad = nn.ConstantPad1d((0, pad_sz), 0.)
+        x = pad(x)
+        x = x.permute(0, 2, 1)
+        return x + res
+
+class EncLayer(nn.Module):
+    def __init__(self, dropout, hidden_size, num_conv, num_heads = 8):
+        super(EncLayer, self).__init__()
+
+        self.self_att = MultiHeadSelfAttention(dropout, hidden_size, num_heads)
+        self.feed_fwd = FeedForward(hidden_size, dropout)
+        self.dropout = dropout
+        self.norm = nn.LayerNorm(hidden_size, eps=1e-06)
+
+        self.convs = nn.ModuleList([Conv1d_same_size(hidden_size, 7, self.norm) for _ in range(num_conv)])
+        self.pos_enc = PositionalEncoder(hidden_size, self.dropout)
+
+    def forward(self, x, batch_size, pad_mask, max_len):
+        x = self.pos_enc(x)
+        for conv in self.convs:
+            x = conv(x)
+        res1 = x
+        x = self.norm(x)
+        x = self.self_att(x, batch_size, pad_mask, max_len)
+        x = self.dropout(x)
+        
+        res2 = res1 + x
+        x = res2
+
+        x = self.norm(x)
+        x = self.feed_fwd(x)
+        x = self.dropout(x)
+
+        x += res2
+        return x
+
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, dropout, hidden_size, num_heads=8):
+        super(MultiHeadSelfAttention, self).__init__()
+
+        # self.self_attn = SelfAttention(dropout, hidden_size, hidden_size)
+        self.attn = ScaledDotProductAttention(hidden_size)
+        # self.self_attn_list = nn.ModuleList([copy.deepcopy(self.attn) for _ in range(num_headz)])
+        self.dropout = dropout
+        self.W_v = nn.Linear(hidden_size, num_heads*hidden_size) # check on the second dimension of this - potentially d_k? hidden size? unclear
+        self.W_k = nn.Linear(hidden_size, num_heads*hidden_size)
+        self.W_q = nn.Linear(hidden_size, num_heads*hidden_size)
+        self.W_o = nn.Linear(num_heads * hidden_size, hidden_size)
+        self.n_heads = num_heads
+        self.hidden_size = hidden_size
+        nn.init.xavier_normal_(self.W_o.weight)
+        nn.init.xavier_normal_(self.W_q.weight)
+        nn.init.xavier_normal_(self.W_k.weight)
+        nn.init.xavier_normal_(self.W_v.weight)
+
+
+    def forward(self, x, batch_size, pad_mask, max_len, sub_mask = None):
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        v = self.W_v(x)
+        k = self.W_k(x)
+        q = self.W_q(x)
+
+        # print(batch_size, type(batch_size))
+        # print('cmask', max_len, type(max_len))
+
+        v = v.view(batch_size, max_len, self.n_heads, self.hidden_size)
+        k = k.view(batch_size, max_len, self.n_heads, self.hidden_size)
+        q = q.view(batch_size, max_len, self.n_heads, self.hidden_size)
+
+        v = v.permute(2, 0, 1, 3).contiguous().view(-1, max_len, self.hidden_size) #b_sz * n_hds, maxlen, hd_sz
+        k = k.permute(2, 0, 1, 3).contiguous().view(-1, max_len, self.hidden_size)
+        q = q.permute(2, 0, 1, 3).contiguous().view(-1, max_len, self.hidden_size)
+
+
+        if sub_mask is not None: 
+            sub_mask = sub_mask.repeat(self.n_heads, 1, 1)
+        pad_mask = pad_mask.repeat(self.n_heads, 1, 1)
+
+
+
+        att_heads = self.attn(k, v, q, pad_mask, sub_mask) #b_sz*n_hds, max_len, hd_sz
+        att_heads = att_heads.view(batch_size, max_len, self.n_heads*self.hidden_size)
+        att = self.W_o(att_heads)
+
+        return att # batch_size, max_seq_len, n_headz * d_k
+
+class TransformerEncLayer(nn.Module):
+    def __init__(self, dropout, hidden_size, num_headz = 3):
+        super(TransformerEncLayer, self).__init__()
+
+        self.self_att = MultiHeadSelfAttention(dropout, hidden_size)
+        self.feed_fwd = FeedForward(hidden_size, dropout)
+        self.dropout = dropout
+        self.norm = nn.LayerNorm(hidden_size, eps=1e-06)
+        self.norm2 = nn.BatchNorm2d(hidden_size, eps = 1e-06)
+        self.size = hidden_size
+
+    def forward(self, x, batch_size, pad_mask, max_len):
+        res1 = x
+        x = self.self_att(x, batch_size, pad_mask, max_len)
+
+        x = self.norm(x)
+
+        x = self.dropout(x)
+
+        res2 = res1 + x
+        x = self.feed_fwd(x)
+        x = self.norm(x)
+
+
+        x = self.dropout(x)
+        x += res2 
+        return x
 
 
 class TransformerDecoder(nn.Module):
@@ -107,65 +200,6 @@ class TransformerDecoder(nn.Module):
         for i, layer in enumerate(self.layers):
             x = layer(x, pad_mask, batch_size, max_len)
         return self.norm(x)
-
-class Conv1d_same_size(nn.Module):
-    def __init__(self, hidden_size, kernel):
-        super(Conv1d_same_size, self).__init__()
-        self.conv = nn.Conv1d(hidden_size, hidden_size, kernel)
-
-    def forward(self, x):
-        # print('x1 ', x.shape)
-        x = x.permute(0, 2, 1)
-        size = x.shape[2]
-        # print('x2 ', x)
-        x = self.conv(x)
-        # print('x3 ', x)
-        pad_sz = size - x.shape[2]
-        pad = nn.ConstantPad1d((0, pad_sz), 0.)
-        x = pad(x)
-        # print('x4 ', x)
-        x = x.permute(0, 2, 1)
-        # print('x5 ', x.shape)
-        return x
-
-class EncLayer(nn.Module):
-    def __init__(self, dropout, hidden_size, num_headz = 3):
-        super(EncLayer, self).__init__()
-        self.self_att = MultiHeadSelfAttention(dropout, hidden_size)
-        self.feed_fwd = FeedForward(hidden_size, dropout)
-        self.dropout = dropout
-        self.norm = nn.LayerNorm(hidden_size, eps=1e-06)
-        # self.norm2 = nn.BatchNorm2d(hidden_size, eps = 1e-06)
-        # self.conv1 = nn.Conv1d(hidden_size, hidden_size, 5)
-        self.conv1 = Conv1d_same_size(hidden_size, 7)
-        self.conv2 = Conv1d_same_size(hidden_size, 7)
-
-        # self.conv2 = nn.Conv1d(hidden_size, hidden_size, 5)
-        self.size = hidden_size
-
-    def forward(self, x, batch_size, pad_mask, max_len):
-        res1 = x
-        # print('x ', x.shape)
-        x = self.norm(x)
-        x = self.conv1(x)
-        # print('x1 ', x.shape)
-        res2 = res1 + x
-        x = self.norm(res2)
-        x = self.conv2(x)
-        # print('2 ', x.shape)
-        res3 = res2 + x
-        
-        
-        x = self.self_att(res3, batch_size, pad_mask, max_len)
-        x = self.dropout(x)
-
-        res4 = res3 + x
-
-        x = self.norm(res4)
-        x = self.feed_fwd(x)
-        x = self.dropout(x)
-        x += res4 
-        return x
 
 def make_sub_mask(seq):
     sz_b, len_s = seq.size()[0], seq.size()[1]
@@ -205,60 +239,7 @@ class DecLayer(nn.Module):
         x += res3
         return x
 
-class MultiHeadSelfAttention(nn.Module):
-    def __init__(self, dropout, hidden_size, num_headz=3):
-        super(MultiHeadSelfAttention, self).__init__()
 
-        # self.self_attn = SelfAttention(dropout, hidden_size, hidden_size)
-        self.attn = ScaledDotProductAttention(hidden_size)
-        # self.self_attn_list = nn.ModuleList([copy.deepcopy(self.attn) for _ in range(num_headz)])
-        self.dropout = dropout
-        self.W_v = nn.Linear(hidden_size, num_headz*hidden_size) # check on the second dimension of this - potentially d_k? hidden size? unclear
-        self.W_k = nn.Linear(hidden_size, num_headz*hidden_size)
-        self.W_q = nn.Linear(hidden_size, num_headz*hidden_size)
-        self.W_o = nn.Linear(num_headz * hidden_size, hidden_size)
-        self.n_heads = num_headz
-        self.hidden_size = hidden_size
-        nn.init.xavier_normal_(self.W_o.weight)
-        nn.init.xavier_normal_(self.W_q.weight)
-        nn.init.xavier_normal_(self.W_k.weight)
-        nn.init.xavier_normal_(self.W_v.weight)
-
-
-    def forward(self, x, batch_size, pad_mask, max_len, sub_mask = None):
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        v = self.W_v(x)
-        k = self.W_k(x)
-        q = self.W_q(x)
-
-        # print(batch_size, type(batch_size))
-        # print('cmask', max_len, type(max_len))
-
-        v = v.view(batch_size, max_len, self.n_heads, self.hidden_size)
-        k = k.view(batch_size, max_len, self.n_heads, self.hidden_size)
-        q = q.view(batch_size, max_len, self.n_heads, self.hidden_size)
-
-        v = v.permute(2, 0, 1, 3).contiguous().view(-1, max_len, self.hidden_size) #b_sz * n_hds, maxlen, hd_sz
-        k = k.permute(2, 0, 1, 3).contiguous().view(-1, max_len, self.hidden_size)
-        q = q.permute(2, 0, 1, 3).contiguous().view(-1, max_len, self.hidden_size)
-
-
-        if sub_mask is not None: 
-            sub_mask = sub_mask.repeat(self.n_heads, 1, 1)
-        pad_mask = pad_mask.repeat(self.n_heads, 1, 1)
-
-
-
-        att_heads = self.attn(k, v, q, pad_mask, sub_mask) #b_sz*n_hds, max_len, hd_sz
-        # att_heads = torch.tensor([[[]] * max_len] * batch_size, device=device)
-
-        # for i, self_att in enumerate(self.self_attn_list):
-        #     att_head = self_att(x, pad_mask, sub_mask)
-        #     att_heads = torch.cat((att_heads, att_head), 2)
-        att_heads = att_heads.view(batch_size, max_len, self.n_heads*self.hidden_size)
-        att = self.W_o(att_heads)
-
-        return att # batch_size, max_seq_len, n_headz * d_k
 
 class SelfAttention(nn.Module):
     def __init__(self, dropout, hidden_size, d_k):
