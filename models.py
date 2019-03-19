@@ -25,7 +25,7 @@ class QANet(nn.Module):
         hidden_size (int): Number of features in the hidden state at each layer.
         drop_prob (float): Dropout probability.
     """
-    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0.):
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0.1):
         super(QANet, self).__init__()
 
         # print("vectors: ", word_vectors)
@@ -33,11 +33,10 @@ class QANet(nn.Module):
                                     char_vectors = char_vectors,
                                     hidden_size=hidden_size,
                                     drop_prob=drop_prob)
-        self.dropout = nn.Dropout(p = drop_prob)
-        self.enc_context = layers.Encoder(1, self.dropout, hidden_size, num_conv=4, num_heads=8)
-        self.enc_query = layers.Encoder(1, self.dropout, hidden_size,  num_conv=4, num_heads=8)
+        self.enc_context = layers.Encoder(1, drop_prob/6, hidden_size, num_conv=4, num_heads=8)
+        self.enc_query = layers.Encoder(1, drop_prob/6, hidden_size,  num_conv=4, num_heads=8)
 
-        self.transformer = layers.Transformer(4*hidden_size)
+        self.transformer = layers.Transformer(4*hidden_size, drop_prob)
 
         self.att = layers.BiDAFAttention(hidden_size= hidden_size,
                                          drop_prob=drop_prob)

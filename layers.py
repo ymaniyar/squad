@@ -23,11 +23,10 @@ import copy
 
 class Transformer(nn.Module):
 
-    def __init__(self, hidden_size, dropout_prob = 0.1, num_layers = 3): 
+    def __init__(self, hidden_size, drop_prob): 
         super(Transformer, self).__init__()
 
-        self.dropout = nn.Dropout(p = dropout_prob)
-        self.encoder = Encoder(num_layers=7, dropout=self.dropout, hidden_size=hidden_size, num_conv=2, num_heads=8)
+        self.encoder = Encoder(num_layers=7, drop_prob=drop_prob/(28), hidden_size=hidden_size, num_conv=2, num_heads=8)
 
         # embedding: batch * seq_len * embed_size (word + chars + 4)
 
@@ -50,9 +49,9 @@ class Transformer(nn.Module):
 
 class Encoder(nn.Module):
 
-    def __init__(self, num_layers, dropout, hidden_size, num_conv, num_heads = 8):
+    def __init__(self, num_layers, drop_prob, hidden_size, num_conv, num_heads = 8):
         super(Encoder, self).__init__()
-        self.layers = nn.ModuleList([EncLayer(dropout, hidden_size, num_heads, num_conv)])
+        self.layers = nn.ModuleList([EncLayer(drop_prob, hidden_size, num_heads, num_conv)])
         self.norm = nn.LayerNorm(hidden_size, eps=1e-06)
 
     def forward(self, x, batch_size, pad_mask, max_len):
@@ -62,10 +61,11 @@ class Encoder(nn.Module):
 
 
 class Conv1d_same_size(nn.Module):
-    def __init__(self, hidden_size, kernel, norm):
+    def __init__(self, hidden_size, kernel, norm, dropout):
         super(Conv1d_same_size, self).__init__()
         self.conv = nn.Conv1d(hidden_size, hidden_size, kernel)
         self.norm = norm
+        self.dropout = dropout
 
     def forward(self, x):
         res = x
@@ -77,19 +77,21 @@ class Conv1d_same_size(nn.Module):
         pad = nn.ConstantPad1d((0, pad_sz), 0.)
         x = pad(x)
         x = x.permute(0, 2, 1)
-        return x + res
+        x += res
+        x = self.dropout(x)
+        return x
 
 class EncLayer(nn.Module):
-    def __init__(self, dropout, hidden_size, num_conv, num_heads = 8):
+    def __init__(self, drop_prob, hidden_size, num_conv, num_heads = 8):
         super(EncLayer, self).__init__()
 
-        self.self_att = MultiHeadSelfAttention(dropout, hidden_size, num_heads)
-        self.feed_fwd = FeedForward(hidden_size, dropout)
-        self.dropout = dropout
+        self.self_att = MultiHeadSelfAttention(hidden_size, num_heads)
+        self.feed_fwd = FeedForward(hidden_size)
+        self.dropout = nn.Dropout(drop_prob)
         self.norm = nn.LayerNorm(hidden_size, eps=1e-06)
 
-        self.convs = nn.ModuleList([Conv1d_same_size(hidden_size, 7, self.norm) for _ in range(num_conv)])
-        self.pos_enc = PositionalEncoder(hidden_size, self.dropout)
+        self.convs = nn.ModuleList([Conv1d_same_size(hidden_size, 7, self.norm, self.dropout) for _ in range(num_conv)])
+        self.pos_enc = PositionalEncoder(hidden_size)
 
     def forward(self, x, batch_size, pad_mask, max_len):
         x = self.pos_enc(x)
@@ -111,13 +113,12 @@ class EncLayer(nn.Module):
         return x
 
 class MultiHeadSelfAttention(nn.Module):
-    def __init__(self, dropout, hidden_size, num_heads=8):
+    def __init__(self, hidden_size, num_heads=8):
         super(MultiHeadSelfAttention, self).__init__()
 
         # self.self_attn = SelfAttention(dropout, hidden_size, hidden_size)
         self.attn = ScaledDotProductAttention(hidden_size)
         # self.self_attn_list = nn.ModuleList([copy.deepcopy(self.attn) for _ in range(num_headz)])
-        self.dropout = dropout
         self.W_v = nn.Linear(hidden_size, num_heads*hidden_size) # check on the second dimension of this - potentially d_k? hidden size? unclear
         self.W_k = nn.Linear(hidden_size, num_heads*hidden_size)
         self.W_q = nn.Linear(hidden_size, num_heads*hidden_size)
@@ -213,7 +214,7 @@ class DecLayer(nn.Module):
 
         self.masked_self_att = MultiHeadSelfAttention(dropout, hidden_size)
         self.self_att = MultiHeadSelfAttention(dropout, hidden_size)
-        self.feed_fwd = FeedForward(hidden_size, dropout)
+        self.feed_fwd = FeedForward(hidden_size)
         self.dropout = dropout
         self.norm = nn.LayerNorm(hidden_size, eps=1e-06)
         self.size = hidden_size
@@ -289,24 +290,23 @@ class ScaledDotProductAttention(nn.Module):
 
 class FeedForward(nn.Module):
 
-    def __init__(self, hidden_size, dropout, ff_size = 128, ff_size2 = 64):
+    def __init__(self, hidden_size, ff_size = 128, ff_size2 = 64):
         super(FeedForward, self).__init__()
         self.W1 = nn.Linear(hidden_size, ff_size)
         self.W2 = nn.Linear(ff_size, hidden_size)
         nn.init.xavier_normal_(self.W1.weight)
         nn.init.xavier_normal_(self.W2.weight)
 
-        self.dropout = dropout
 
 
     def forward(self, x):
-        x = self.dropout(F.relu(self.W1(x)))
+        x = F.relu(self.W1(x))
         return self.W2(x)
 
 
 
 class PositionalEncoder(nn.Module):
-    def __init__(self, hidden_size, dropout, max_len=500):
+    def __init__(self, hidden_size, max_len=500):
         super(PositionalEncoder, self).__init__()
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         pe = torch.zeros((max_len, hidden_size), device=device)
@@ -316,10 +316,9 @@ class PositionalEncoder(nn.Module):
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe)
-        self.dropout = dropout
 
     def forward(self, x):
-        return self.dropout(x + Variable(self.pe[:, :x.size(1)], requires_grad=False))
+        return x + Variable(self.pe[:, :x.size(1)], requires_grad=False)
 
 class TransformerOutput(nn.Module):
     def __init__(self, hidden_size):
