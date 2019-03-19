@@ -64,6 +64,7 @@ class Conv1d_same_size(nn.Module):
     def __init__(self, hidden_size, kernel, norm, dropout):
         super(Conv1d_same_size, self).__init__()
         self.conv = nn.Conv1d(hidden_size, hidden_size, kernel)
+        nn.init.xavier_normal_(self.conv.weight)
         self.norm = norm
         self.dropout = dropout
 
