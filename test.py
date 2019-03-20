@@ -41,7 +41,7 @@ def main(args):
 
     # Get model
     log.info('Building model...')
-    model = Transformer(word_vectors=word_vectors,
+    model = QANet(word_vectors=word_vectors,
                   hidden_size=args.hidden_size)
     model = nn.DataParallel(model, gpu_ids)
     log.info('Loading checkpoint from {}...'.format(args.load_path))
